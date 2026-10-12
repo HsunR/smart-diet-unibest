@@ -346,9 +346,10 @@ function removeCurrent() {
 
 <style scoped lang="scss">
 .report-page {
+  --tabbar-height: 100rpx;
   min-height: 100vh;
   box-sizing: border-box;
-  padding: 24rpx 24rpx 140rpx;
+  padding: 24rpx 24rpx calc(160rpx + env(safe-area-inset-bottom));
   background: #f3f6f3;
   color: #244233;
 }
@@ -612,7 +613,10 @@ function removeCurrent() {
 }
 .modal-overlay {
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom));
+  left: 0;
   z-index: 100;
   background: rgba(13, 35, 23, 0.48);
   display: flex;
@@ -620,7 +624,7 @@ function removeCurrent() {
 }
 .detail-sheet {
   width: 100%;
-  max-height: 88vh;
+  max-height: 100%;
   box-sizing: border-box;
   padding: 14rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));
   overflow-y: auto;
