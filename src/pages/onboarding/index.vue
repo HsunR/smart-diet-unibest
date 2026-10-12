@@ -103,9 +103,12 @@ async function next() {
 
 <style scoped lang="scss">
 .onboarding-page {
-  min-height: 100vh;
+  // uni-page-wrapper 已扣除原生导航栏高度；使用 100vh 会额外撑出导航栏高度并产生滚动条。
+  height: 100%;
+  min-height: 0;
   box-sizing: border-box;
   padding: 40rpx 40rpx calc(40rpx + env(safe-area-inset-bottom));
+  overflow: hidden;
   background: linear-gradient(180deg, #f4fbf6, #fff 45%);
   display: flex;
   flex-direction: column;
@@ -246,6 +249,11 @@ async function next() {
 .actions {
   display: flex;
   gap: 18rpx;
+  position: fixed;
+  z-index: 1;
+  right: 40rpx;
+  bottom: calc(40rpx + env(safe-area-inset-bottom));
+  left: 40rpx;
 }
 .back-button,
 .next-button {

@@ -321,7 +321,13 @@ function preview(url: string) {
 
 <style scoped lang="scss">
 .chat-page {
-  height: 100vh;
+  // 聊天区、快捷操作和全局 TabBar 各自占用独立区域，避免互相覆盖。
+  --chat-header-height: 112rpx;
+  --chat-action-height: 126rpx;
+  --tabbar-height: 100rpx;
+  height: 100%;
+  min-height: 0;
+  position: relative;
   background: #f4f7f4;
   display: flex;
   flex-direction: column;
@@ -329,7 +335,13 @@ function preview(url: string) {
   color: #254334;
 }
 .chat-header {
-  flex: none;
+  box-sizing: border-box;
+  position: fixed;
+  z-index: 10;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: calc(var(--chat-header-height) + env(safe-area-inset-top));
   padding-left: 30rpx;
   padding-right: 30rpx;
   padding-bottom: 22rpx;
@@ -382,7 +394,13 @@ function preview(url: string) {
   font-size: 18rpx;
 }
 .message-scroll {
-  flex: 1;
+  position: fixed;
+  top: calc(var(--chat-header-height) + env(safe-area-inset-top));
+  right: 0;
+  bottom: calc(
+    var(--chat-action-height) + var(--tabbar-height) + env(safe-area-inset-bottom) + env(safe-area-inset-bottom)
+  );
+  left: 0;
   min-height: 0;
 }
 .message-list {
@@ -694,8 +712,14 @@ function preview(url: string) {
   height: 2rpx;
 }
 .action-bar {
-  flex: none;
-  padding: 16rpx 22rpx;
+  box-sizing: border-box;
+  position: fixed;
+  z-index: 10;
+  right: 0;
+  bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom));
+  left: 0;
+  height: calc(var(--chat-action-height) + env(safe-area-inset-bottom));
+  padding: 16rpx 22rpx calc(16rpx + env(safe-area-inset-bottom));
   background: #fff;
   border-top: 1rpx solid #e9eeea;
   display: flex;
