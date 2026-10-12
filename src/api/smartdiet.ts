@@ -82,22 +82,23 @@ export function uploadFoodImage(filePath: string) {
       name: 'file',
       header: token ? { Authorization: `Bearer ${token}` } : {},
       success(res) {
-        if (res.statusCode < 200 || res.statusCode >= 300) {
-          try {
-            const body = JSON.parse(res.data) as { detail?: string }
-            reject(new Error(body.detail || '图片上传失败'))
-          }
-          catch {
-            reject(new Error('图片上传失败'))
-          }
-          return
-        }
+        let body: { code?: number, message?: string, data?: { url: string, filename: string } }
         try {
-          resolve(JSON.parse(res.data))
+          body = JSON.parse(res.data)
         }
         catch {
           reject(new Error('图片上传响应格式错误'))
+          return
         }
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          reject(new Error(body.message || '图片上传失败'))
+          return
+        }
+        if (body.code !== 0 || !body.data) {
+          reject(new Error(body.message || '图片上传失败'))
+          return
+        }
+        resolve(body.data)
       },
       fail: err => reject(new Error(err.errMsg || '图片上传失败')),
     })

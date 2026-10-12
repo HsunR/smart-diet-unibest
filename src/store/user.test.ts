@@ -14,10 +14,6 @@ const mockUser: SmartDietUser = {
   age: 28,
   height: 175,
   weight: 68,
-  activityLevel: 3,
-  goal: 'maintain',
-  preferences: [],
-  allergies: [],
   createdAt: '2026-08-18T00:00:00Z',
 }
 
@@ -61,6 +57,6 @@ describe('useUserStore', () => {
     const store = useUserStore()
     await store.fetchUserInfo()
     expect(store.userInfo.id).toBe('user-1')
-    expect(store.userInfo.activityLevel).toBe(3)
+    expect(store.userInfo.age).toBe(25)
   })
 })

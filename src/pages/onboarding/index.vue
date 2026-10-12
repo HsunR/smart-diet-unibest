@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { updateCurrentUser } from '@/api/smartdiet'
 import { useUserStore } from '@/store'
-import { goalOptions } from '@/utils/smartdiet'
 
 definePage({
   style: { navigationBarTitleText: '完善个人资料', navigationBarBackgroundColor: '#f6fbf7' },
@@ -10,21 +9,12 @@ definePage({
 const userStore = useUserStore()
 const step = ref(0)
 const saving = ref(false)
-const steps = ['性别', '年龄', '身高', '体重', '活动量', '目标']
-const activityOptions = [
-  { value: 1, label: '久坐少动', desc: '日常以坐姿为主' },
-  { value: 2, label: '轻度活动', desc: '每周运动 1–2 次' },
-  { value: 3, label: '中度活动', desc: '每周运动 3–5 次' },
-  { value: 4, label: '高度活动', desc: '每周运动 6–7 次' },
-  { value: 5, label: '专业训练', desc: '高强度训练或体力劳动' },
-]
+const steps = ['性别', '年龄', '身高', '体重']
 const form = reactive({
   gender: userStore.userInfo.gender || 1,
   age: Number(userStore.userInfo.age || 25),
   height: Number(userStore.userInfo.height || 170),
   weight: Number(userStore.userInfo.weight || 65),
-  activityLevel: Number(userStore.userInfo.activityLevel || 3),
-  goal: userStore.userInfo.goal || 'maintain',
 })
 
 async function next() {
@@ -56,8 +46,8 @@ async function next() {
     </view>
     <view class="step-copy">
       <text class="eyebrow">第 {{ step + 1 }} / {{ steps.length }} 步</text>
-      <text class="step-title">{{ ['您的生理性别是？', '您的年龄是？', '您的身高是？', '您当前的体重是？', '您平时的活动量？', '您希望达成什么目标？'][step] }}</text>
-      <text class="step-desc">这些信息只用于估算个性化饮食目标</text>
+      <text class="step-title">{{ ['您的生理性别是？', '您的年龄是？', '您的身高是？', '您当前的体重是？'][step] }}</text>
+      <text class="step-desc">这些信息用于完善基础身体资料</text>
     </view>
 
     <view class="step-body">
@@ -77,16 +67,6 @@ async function next() {
       </view>
       <view v-else-if="step === 3" class="number-card">
         <input v-model.number="form.weight" type="digit" class="number-input"><text class="unit">kg</text><slider :value="form.weight" :min="35" :max="160" active-color="#2ca862" @changing="form.weight = $event.detail.value" />
-      </view>
-      <view v-else-if="step === 4" class="list-choices">
-        <view v-for="item in activityOptions" :key="item.value" class="list-choice" :class="{ selected: form.activityLevel === item.value }" @click="form.activityLevel = item.value">
-          <view><text class="list-title">{{ item.label }}</text><text class="list-desc">{{ item.desc }}</text></view><text class="check">{{ form.activityLevel === item.value ? '✓' : '' }}</text>
-        </view>
-      </view>
-      <view v-else class="goal-grid">
-        <view v-for="item in goalOptions" :key="item.value" class="choice-card goal-card" :class="{ selected: form.goal === item.value }" @click="form.goal = item.value">
-          <text class="choice-icon">{{ item.icon }}</text><text>{{ item.label }}</text>
-        </view>
       </view>
     </view>
 

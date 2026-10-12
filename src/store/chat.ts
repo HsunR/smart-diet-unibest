@@ -1,4 +1,4 @@
-import type { FoodItem, MealOverview, MealType } from '@/api/types/smartdiet'
+import type { MealType } from '@/api/types/smartdiet'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
@@ -12,6 +12,7 @@ export interface UiMessage {
 }
 
 export interface FoodDraft {
+  /** 图片仅作为饮食记录附件，不触发 AI 识别。 */
   localImageUrl: string
   imageUrl: string
   date: string
@@ -22,10 +23,6 @@ export interface FoodDraft {
   negativeTags: string[]
   price: number | null
   rating: number
-  foods: FoodItem[]
-  mealOverview: MealOverview
-  dietaryAdvice: string
-  recognizing: boolean
   saving: boolean
   saved: boolean
 }
@@ -34,7 +31,7 @@ function id() {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
-const welcome = '您好！我是您的饮食记录助手 🥗\n\n上传一张餐食照片后，填写名称、描述、标签、价格、日期和星级，即可保存这餐记录。'
+const welcome = '欢迎使用饮食记录。填写每一餐的名称、感受、标签和星级，建立自己的饮食记录。'
 
 export const useChatStore = defineStore('smartdiet-chat', () => {
   const messages = ref<UiMessage[]>([])

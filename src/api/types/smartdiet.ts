@@ -9,10 +9,6 @@ export interface SmartDietUser {
   age: number
   height: number
   weight: number
-  activityLevel: number
-  goal: 'lose_weight' | 'maintain' | 'gain_muscle'
-  preferences: string[]
-  allergies: string[]
   createdAt: string
 }
 
@@ -27,7 +23,7 @@ export interface WebAccountCredentials {
   password: string
 }
 
-export type UserUpdate = Partial<Pick<SmartDietUser, 'nickname' | 'avatar' | 'gender' | 'age' | 'height' | 'weight' | 'activityLevel' | 'goal' | 'preferences' | 'allergies'>>
+export type UserUpdate = Partial<Pick<SmartDietUser, 'nickname' | 'avatar' | 'gender' | 'age' | 'height' | 'weight'>>
 
 export interface FoodTags {
   positive?: string[]
@@ -60,8 +56,6 @@ export interface FoodRecordInput {
   positiveTags: string[]
   negativeTags: string[]
   price: number | null
-  foods: FoodItem[]
-  mealOverview: MealOverview
   imageUrl: string
   rating: number
 }

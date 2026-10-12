@@ -1,16 +1,10 @@
-import type { MealType, SmartDietUser } from '@/api/types/smartdiet'
+import type { MealType } from '@/api/types/smartdiet'
 
 export const mealOptions: Array<{ value: MealType, label: string, icon: string }> = [
   { value: 'breakfast', label: '早餐', icon: '🌅' },
   { value: 'lunch', label: '午餐', icon: '☀️' },
   { value: 'dinner', label: '晚餐', icon: '🌙' },
   { value: 'other', label: '其他', icon: '🍎' },
-]
-
-export const goalOptions = [
-  { value: 'lose_weight' as const, label: '减脂', icon: '🔥' },
-  { value: 'maintain' as const, label: '保持', icon: '⚖️' },
-  { value: 'gain_muscle' as const, label: '增肌', icon: '💪' },
 ]
 
 export function formatDate(date: Date) {
@@ -41,21 +35,6 @@ export function getCurrentMealType(): MealType {
 
 export function mealLabel(value: MealType) {
   return mealOptions.find(item => item.value === value)?.label || '其他'
-}
-
-export function calculateNutritionTarget(user: SmartDietUser) {
-  const sexOffset = user.gender === 2 ? -161 : 5
-  const bmr = 10 * user.weight + 6.25 * user.height - 5 * user.age + sexOffset
-  const activityFactors = [1.2, 1.375, 1.55, 1.725, 1.9]
-  const tdee = bmr * (activityFactors[user.activityLevel - 1] || 1.55)
-  const calorieFactor = user.goal === 'lose_weight' ? 0.82 : user.goal === 'gain_muscle' ? 1.12 : 1
-  const calories = Math.max(1200, Math.round(tdee * calorieFactor))
-  return {
-    calories,
-    protein: Math.round(user.weight * (user.goal === 'gain_muscle' ? 1.8 : 1.4)),
-    carbs: Math.round(calories * 0.5 / 4),
-    fat: Math.round(calories * 0.25 / 9),
-  }
 }
 
 export function chooseImage(sourceType: Array<'camera' | 'album'> = ['camera', 'album']) {

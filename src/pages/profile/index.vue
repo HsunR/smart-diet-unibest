@@ -2,7 +2,7 @@
 import type { SmartDietUser } from '@/api/types/smartdiet'
 import { absoluteAssetUrl, getRecordHistory, updateCurrentUser, uploadFoodImage } from '@/api/smartdiet'
 import { useChatStore, useTokenStore, useUserStore } from '@/store'
-import { calculateNutritionTarget, chooseImage, formatDate, goalOptions } from '@/utils/smartdiet'
+import { chooseImage, formatDate } from '@/utils/smartdiet'
 
 definePage({
   style: {
@@ -18,10 +18,6 @@ const editing = ref(false)
 const saving = ref(false)
 const editForm = ref<SmartDietUser>({ ...userStore.userInfo })
 const stats = reactive({ days: 0, meals: 0, averageScore: 0 })
-const activityLabels = ['久坐少动', '轻度活动', '中度活动', '高度活动', '专业训练']
-
-const nutrition = computed(() => calculateNutritionTarget(userStore.userInfo))
-const goalLabel = computed(() => goalOptions.find(item => item.value === userStore.userInfo.goal)?.label || '保持')
 
 async function loadProfile() {
   if (!tokenStore.updateNowTime().hasLogin) {
@@ -38,7 +34,7 @@ async function loadProfile() {
     stats.meals = records.length
     stats.days = new Set(records.map(item => item.date)).size
     stats.averageScore = records.length
-      ? Math.round(records.reduce((sum, item) => sum + item.mealOverview.overallHealthScore, 0) / records.length)
+      ? Math.round(records.reduce((sum, item) => sum + (item.rating || 0), 0) / records.length * 10) / 10
       : 0
   }
   catch (error) {
@@ -63,10 +59,6 @@ async function saveProfile() {
       age: Number(editForm.value.age),
       height: Number(editForm.value.height),
       weight: Number(editForm.value.weight),
-      activityLevel: Number(editForm.value.activityLevel),
-      goal: editForm.value.goal,
-      preferences: editForm.value.preferences,
-      allergies: editForm.value.allergies,
     })
     userStore.setUserInfo(updated)
     editing.value = false
@@ -126,7 +118,7 @@ function logout() {
       <view class="identity">
         <input v-if="editing" v-model="editForm.nickname" class="nickname-input" placeholder="输入昵称">
         <text v-else class="nickname">{{ userStore.userInfo.nickname || 'SmartDiet 用户' }}</text>
-        <text class="goal-badge">{{ goalLabel }}计划 · 已记录 {{ stats.days }} 天</text>
+        <text class="goal-badge">已记录 {{ stats.days }} 天</text>
       </view>
       <view class="edit-trigger" @click="editing ? saveProfile() : beginEdit()">
         {{ editing ? '保存' : '编辑' }}
@@ -138,29 +130,7 @@ function logout() {
       <view class="stat-divider" />
       <view><text class="stat-value">{{ stats.meals }}</text><text class="stat-label">记录餐次</text></view>
       <view class="stat-divider" />
-      <view><text class="stat-value green">{{ stats.averageScore || '--' }}</text><text class="stat-label">平均评分</text></view>
-    </view>
-
-    <view class="section-title">
-      <text>每日营养目标</text><text class="section-note">基于当前资料估算</text>
-    </view>
-    <view class="nutrition-card">
-      <view class="calorie-ring">
-        <view class="calorie-inner">
-          <text class="calorie-value">{{ nutrition.calories }}</text><text class="calorie-label">千卡</text>
-        </view>
-      </view>
-      <view class="macro-list">
-        <view class="macro">
-          <view class="macro-dot protein" /><text>蛋白质</text><text class="macro-value">{{ nutrition.protein }}g</text>
-        </view>
-        <view class="macro">
-          <view class="macro-dot carbs" /><text>碳水</text><text class="macro-value">{{ nutrition.carbs }}g</text>
-        </view>
-        <view class="macro">
-          <view class="macro-dot fat" /><text>脂肪</text><text class="macro-value">{{ nutrition.fat }}g</text>
-        </view>
-      </view>
+      <view><text class="stat-value green">{{ stats.averageScore || '--' }}</text><text class="stat-label">平均星级</text></view>
     </view>
 
     <view class="section-title">
@@ -185,16 +155,6 @@ function logout() {
       <view class="info-row">
         <text class="info-icon">⚖️</text><text class="info-label">体重</text><view class="number-value">
           <input v-if="editing" v-model.number="editForm.weight" type="digit"><text>{{ editing ? 'kg' : `${userStore.userInfo.weight} kg` }}</text>
-        </view>
-      </view>
-      <picker :disabled="!editing" :range="activityLabels" :value="editForm.activityLevel - 1" @change="editForm.activityLevel = Number($event.detail.value) + 1">
-        <view class="info-row">
-          <text class="info-icon">🏃</text><text class="info-label">活动量</text><text class="info-value">{{ activityLabels[(editing ? editForm.activityLevel : userStore.userInfo.activityLevel) - 1] }} {{ editing ? '›' : '' }}</text>
-        </view>
-      </picker>
-      <view class="info-row goal-row">
-        <text class="info-icon">🎯</text><text class="info-label">健康目标</text><view class="goal-options">
-          <text v-for="item in goalOptions" :key="item.value" :class="{ active: (editing ? editForm.goal : userStore.userInfo.goal) === item.value }" @click="editing && (editForm.goal = item.value)">{{ item.label }}</text>
         </view>
       </view>
     </view>

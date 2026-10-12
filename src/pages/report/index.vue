@@ -61,13 +61,13 @@ const dailyScores = computed(() => weekDays.value.map((day) => {
   const items = records.value.filter(record => record.date === day.date)
   return {
     ...day,
-    score: items.length ? Math.round(items.reduce((sum, item) => sum + item.mealOverview.overallHealthScore, 0) / items.length) : 0,
+    score: items.length ? Math.round(items.reduce((sum, item) => sum + (item.rating || 0), 0) / items.length * 10) / 10 : 0,
   }
 }))
 
 const averageScore = computed(() => {
   const scored = dailyScores.value.filter(item => item.score > 0)
-  return scored.length ? Math.round(scored.reduce((sum, item) => sum + item.score, 0) / scored.length) : 0
+  return scored.length ? Math.round(scored.reduce((sum, item) => sum + item.score, 0) / scored.length * 10) / 10 : 0
 })
 
 const detail = computed(() => detailRecords.value[detailIndex.value] || null)
@@ -114,7 +114,7 @@ function openCell(date: string, mealType: MealType) {
   if (!items.length) {
     uni.showModal({
       title: '添加饮食记录',
-      content: `要为 ${date} 的${mealOptions.find(item => item.value === mealType)?.label}拍照记录吗？`,
+      content: `要为 ${date} 的${mealOptions.find(item => item.value === mealType)?.label}填写饮食记录吗？`,
       success(res) {
         if (res.confirm) {
           uni.setStorageSync('pendingRecord', { date, mealType })
@@ -155,8 +155,12 @@ async function saveEdit() {
   try {
     const updated = await updateRecord(editRecord.value.id, {
       mealType: editRecord.value.mealType,
-      foods: editRecord.value.foods,
-      mealOverview: editRecord.value.mealOverview,
+      name: editRecord.value.name,
+      description: editRecord.value.description,
+      positiveTags: editRecord.value.positiveTags,
+      negativeTags: editRecord.value.negativeTags,
+      price: editRecord.value.price,
+      rating: editRecord.value.rating,
     })
     const recordIndex = records.value.findIndex(item => item.id === updated.id)
     if (recordIndex >= 0)
@@ -220,13 +224,13 @@ function removeCurrent() {
 
     <view class="summary-row">
       <view class="summary-main">
-        <text class="summary-eyebrow">本周健康评分</text><view><text class="summary-score">{{ averageScore || '--' }}</text><text class="summary-unit">/ 100</text></view>
+        <text class="summary-eyebrow">本周平均星级</text><view><text class="summary-score">{{ averageScore || '--' }}</text><text class="summary-unit">/ 5</text></view>
       </view>
       <view class="summary-stat">
         <text class="stat-value">{{ records.length }}</text><text class="stat-label">已记录餐次</text>
       </view>
       <view class="summary-stat">
-        <text class="stat-value">{{ records.length ? new Set(records.flatMap(item => item.foods.map(food => food.name))).size : 0 }}</text><text class="stat-label">食物种类</text>
+        <text class="stat-value">{{ records.filter(item => item.rating).length }}</text><text class="stat-label">已评分餐次</text>
       </view>
     </view>
 
@@ -249,8 +253,8 @@ function removeCurrent() {
             <view v-for="day in weekDays" :key="`${meal.value}-${day.date}`" class="record-cell" :class="{ today: day.isToday }" @click="openCell(day.date, meal.value)">
               <template v-if="cellRecords(day.date, meal.value).length">
                 <image v-if="cellRecords(day.date, meal.value)[0].imageUrl" class="cell-image" :src="absoluteAssetUrl(cellRecords(day.date, meal.value)[0].imageUrl)" mode="aspectFill" />
-                <text class="cell-score">{{ cellRecords(day.date, meal.value)[0].mealOverview.overallHealthScore }}</text>
-                <text class="cell-food">{{ cellRecords(day.date, meal.value)[0].foods[0]?.name || '已记录' }}</text>
+                <text class="cell-score">{{ cellRecords(day.date, meal.value)[0].rating || '-' }}★</text>
+                <text class="cell-food">{{ cellRecords(day.date, meal.value)[0].name || '已记录' }}</text>
                 <text v-if="cellRecords(day.date, meal.value).length > 1" class="record-count">+{{ cellRecords(day.date, meal.value).length - 1 }}</text>
               </template>
               <text v-else class="add-mark">＋</text>
@@ -265,13 +269,13 @@ function removeCurrent() {
 
     <view class="section-card trend-card">
       <view class="section-heading">
-        <text>健康趋势</text><text class="section-hint">每日平均健康评分</text>
+        <text>评分趋势</text><text class="section-hint">每日平均星级评分</text>
       </view>
       <view class="trend-chart">
         <view v-for="item in dailyScores" :key="item.date" class="trend-column">
           <text class="trend-score">{{ item.score || '' }}</text>
           <view class="bar-track">
-            <view class="bar-value" :class="{ empty: !item.score }" :style="{ height: `${Math.max(item.score, 5)}%` }" />
+            <view class="bar-value" :class="{ empty: !item.score }" :style="{ height: `${Math.max(item.score * 20, 5)}%` }" />
           </view>
           <text :class="{ todayText: item.isToday }">{{ item.dayName.slice(1) }}</text>
         </view>
@@ -290,18 +294,16 @@ function removeCurrent() {
         <template v-if="!editing">
           <image v-if="detail.imageUrl" class="detail-image" :src="absoluteAssetUrl(detail.imageUrl)" mode="aspectFill" />
           <view class="detail-score-row">
-            <view><text class="detail-score">{{ detail.mealOverview.overallHealthScore }}</text><text class="detail-score-unit">健康分</text></view><text class="rating">{{ detail.rating ? '★'.repeat(detail.rating) : '未评分' }}</text>
+            <view><text class="detail-score">{{ detail.rating || '--' }}</text><text class="detail-score-unit">星</text></view><text class="rating">{{ detail.rating ? '★'.repeat(detail.rating) : '未评分' }}</text>
           </view>
-          <text class="detail-summary">{{ detail.mealOverview.summary }}</text>
-          <view class="tag-row">
-            <text v-for="tag in detail.mealOverview.healthTags?.positive || []" :key="tag" class="tag positive">{{ tag }}</text><text v-for="tag in detail.mealOverview.healthTags?.warning || []" :key="tag" class="tag warning">{{ tag }}</text>
+          <text class="detail-summary">{{ detail.name }}</text>
+          <text v-if="detail.description" class="detail-summary">{{ detail.description }}</text>
+          <text v-if="detail.price !== null" class="detail-price">消费 ¥{{ detail.price }}</text>
+          <view v-if="detail.positiveTags.length" class="tag-section">
+            <text class="tag-label">喜欢</text><view class="tag-row"><text v-for="tag in detail.positiveTags" :key="`positive-${tag}`" class="tag positive">{{ tag }}</text></view>
           </view>
-          <view class="detail-food-list">
-            <view v-for="food in detail.foods" :key="food.name" class="detail-food">
-              <view><text class="detail-food-name">{{ food.name }}</text><text class="detail-food-advice">{{ food.advice }}</text></view><view class="detail-food-meta">
-                <text>{{ food.weight }}g</text><text>{{ food.score }}分</text>
-              </view>
-            </view>
+          <view v-if="detail.negativeTags.length" class="tag-section">
+            <text class="tag-label">不喜欢</text><view class="tag-row"><text v-for="tag in detail.negativeTags" :key="`negative-${tag}`" class="tag warning">{{ tag }}</text></view>
           </view>
           <view v-if="detailRecords.length > 1" class="record-nav">
             <button :disabled="detailIndex === 0" @click="detailIndex--">
@@ -326,10 +328,16 @@ function removeCurrent() {
             </view>
           </picker>
           <view class="edit-field vertical">
-            <text>餐食总结</text><textarea v-model="editRecord.mealOverview.summary" auto-height :maxlength="200" />
+            <text>饮食名称</text><input v-model="editRecord.name" placeholder="饮食名称">
           </view>
-          <view v-for="(food, index) in editRecord.foods" :key="index" class="edit-food">
-            <input v-model="food.name" placeholder="食物名称"><view><input v-model.number="food.weight" type="digit"><text>g</text><input v-model.number="food.score" type="number"><text>分</text></view>
+          <view class="edit-field vertical">
+            <text>饮食描述</text><textarea v-model="editRecord.description" auto-height :maxlength="1000" />
+          </view>
+          <view class="edit-field">
+            <text>饮食价格</text><input v-model.number="editRecord.price" type="digit" placeholder="未填写">
+          </view>
+          <view class="edit-field">
+            <text>星级评分</text><view><text v-for="star in 5" :key="star" class="star" :class="{ active: star <= (editRecord.rating || 0) }" @click="editRecord.rating = star">★</text></view>
           </view>
           <view class="sheet-actions">
             <button class="danger-button" @click="editing = false">
@@ -701,11 +709,26 @@ function removeCurrent() {
   font-size: 24rpx;
   line-height: 1.55;
 }
+.detail-price {
+  display: block;
+  margin-top: 14rpx;
+  color: #22884c;
+  font-size: 25rpx;
+  font-weight: 700;
+}
+.tag-section {
+  margin-top: 16rpx;
+}
+.tag-label {
+  display: block;
+  color: #839087;
+  font-size: 20rpx;
+}
 .tag-row {
   display: flex;
   flex-wrap: wrap;
   gap: 10rpx;
-  margin-top: 16rpx;
+  margin-top: 8rpx;
 }
 .tag {
   padding: 7rpx 15rpx;

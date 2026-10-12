@@ -78,19 +78,19 @@ async function handleWechatLogin() {
         <text class="logo">🥗</text>
       </view>
       <text class="title">SmartDiet</text>
-      <text class="subtitle">你的 AI 营养师</text>
+      <text class="subtitle">你的饮食记录助手</text>
       <text class="description">拍照记录每一餐，让健康饮食变得简单</text>
     </view>
 
     <view class="feature-card">
       <view class="feature">
-        <text class="feature-icon">📷</text><view><text class="feature-title">拍照识别</text><text class="feature-desc">自动分析食物与健康评分</text></view>
+        <text class="feature-icon">📷</text><view><text class="feature-title">拍照记录</text><text class="feature-desc">上传图片，填写专属饮食记录</text></view>
       </view>
       <view class="feature">
         <text class="feature-icon">📊</text><view><text class="feature-title">饮食报告</text><text class="feature-desc">清晰回顾每周饮食趋势</text></view>
       </view>
       <view class="feature">
-        <text class="feature-icon">💡</text><view><text class="feature-title">智能建议</text><text class="feature-desc">结合个人目标给出贴心建议</text></view>
+        <text class="feature-icon">⭐</text><view><text class="feature-title">真实评价</text><text class="feature-desc">记录喜好、价格与星级评分</text></view>
       </view>
     </view>
 

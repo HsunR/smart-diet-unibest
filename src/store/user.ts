@@ -13,10 +13,6 @@ const userInfoState: SmartDietUser = {
   age: 25,
   height: 170,
   weight: 65,
-  activityLevel: 3,
-  goal: 'maintain',
-  preferences: [],
-  allergies: [],
   createdAt: '',
 }
 
