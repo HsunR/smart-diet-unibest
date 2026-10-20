@@ -5,9 +5,9 @@ export default defineUniPages({
   globalStyle: {
     navigationStyle: 'default',
     navigationBarTitleText: 'SmartDiet',
-    navigationBarBackgroundColor: '#f6fbf7',
+    navigationBarBackgroundColor: '#faf8f1',
     navigationBarTextStyle: 'black',
-    backgroundColor: '#F6F8F6',
+    backgroundColor: '#FAF8F1',
   },
   easycom: {
     autoscan: true,

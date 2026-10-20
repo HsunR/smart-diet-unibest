@@ -3,7 +3,7 @@ import { updateCurrentUser } from '@/api/smartdiet'
 import { useUserStore } from '@/store'
 
 definePage({
-  style: { navigationBarTitleText: '完善个人资料', navigationBarBackgroundColor: '#f6fbf7' },
+  style: { navigationBarTitleText: '完善个人资料', navigationBarBackgroundColor: '#faf8f1' },
 })
 
 const userStore = useUserStore()
@@ -41,6 +41,7 @@ async function next() {
 
 <template>
   <view class="onboarding-page">
+    <view class="onboarding-brand"><image src="/static/images/meal-bowl-illustration.png" mode="aspectFit" /><view><text>SmartDiet</text><text>建立专属饮食档案</text></view></view>
     <view class="progress-row">
       <view v-for="(_, index) in steps" :key="index" class="progress-dot" :class="{ active: index <= step }" />
     </view>
@@ -259,4 +260,22 @@ async function next() {
   background: linear-gradient(135deg, #35b86c, #238e53);
   box-shadow: 0 14rpx 30rpx rgba(38, 151, 84, 0.2);
 }
+.onboarding-page { background: radial-gradient(circle at 88% 12%, #fffaf0 0%, #f4f5e9 46%, #eaf1e5 100%); }
+.onboarding-brand { display: flex; align-items: center; gap: 10rpx; margin-bottom: 27rpx; }
+.onboarding-brand image { width: 70rpx; height: 60rpx; }
+.onboarding-brand text { display: block; }
+.onboarding-brand text:first-child { color: #214632; font-size: 25rpx; font-weight: 800; }
+.onboarding-brand text:last-child { margin-top: 2rpx; color: #78917d; font-size: 18rpx; }
+.progress-dot { background: #dce7d8; }
+.progress-dot.active { background: #4a925e; }
+.eyebrow { color: #5b9264; }
+.step-copy { margin-top: 44rpx; }
+.step-title { color: #173d2b; }
+.step-desc { color: #7e907f; }
+.choice-card, .number-card { border-color: #e5eadd; background: #fffefa; box-shadow: var(--sd-card-shadow); }
+.choice-card.selected { border-color: #88b38d; background: #eaf3e6; color: #286c43; box-shadow: 0 13rpx 28rpx rgba(69, 119, 70, 0.13); }
+.number-input { color: #245d3b; }
+.back-button, .next-button { border-radius: 999rpx; }
+.back-button { background: #e9efe5; }
+.next-button { background: linear-gradient(120deg, #438d58, #276e45); box-shadow: 0 12rpx 24rpx rgba(45, 111, 68, 0.18); }
 </style>

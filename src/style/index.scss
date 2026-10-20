@@ -11,11 +11,15 @@
 
 :root,
 page {
-  // 修改按主题色
-  // --wot-color-theme: #37c2bc;
-
-  // 修改按钮背景色
-  // --wot-button-primary-bg-color: green;
+  --sd-forest: #153d2b;
+  --sd-green: #2f7b4b;
+  --sd-sage: #eaf2e6;
+  --sd-cream: #faf8f1;
+  --sd-ink-soft: #657b6a;
+  --sd-line: #e7ece3;
+  --sd-card-shadow: 0 12rpx 35rpx rgba(36, 67, 43, 0.07);
+  --wot-color-theme: #2f7b4b;
+  background-color: var(--sd-cream);
 }
 
 /*

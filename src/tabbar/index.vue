@@ -88,20 +88,21 @@ onMounted(() => {
   })
 })
 // #endif
-const activeColor = 'var(--wot-color-theme, #1890ff)'
-const inactiveColor = '#666'
+const activeColor = '#286b42'
+const inactiveColor = '#929b92'
 function getColorByIndex(index: number) {
   return tabbarStore.curIdx === index ? activeColor : inactiveColor
 }
 </script>
 
 <template>
-  <view v-if="customTabbarEnable" class="h-50px pb-safe">
-    <view class="border-and-fixed bg-white" @touchmove.stop.prevent>
-      <view class="h-50px flex items-center">
+  <view v-if="customTabbarEnable" class="tabbar-placeholder pb-safe">
+    <view class="border-and-fixed" @touchmove.stop.prevent>
+      <view class="tabbar-row">
         <view
           v-for="(item, index) in tabbarList" :key="index"
-          class="flex flex-1 flex-col items-center justify-center"
+          class="tabbar-entry"
+          :class="{ active: tabbarStore.curIdx === index }"
           :style="{ color: getColorByIndex(index) }"
           @click="handleClick(index)"
         >
@@ -127,9 +128,15 @@ function getColorByIndex(index: number) {
   left: 0;
   right: 0;
   z-index: 1000;
-  border-top: 1px solid #eee;
+  border-top: 1rpx solid #edf0e9;
+  background: rgba(255, 255, 253, 0.98);
+  box-shadow: 0 -8rpx 24rpx rgba(40, 73, 48, 0.04);
   box-sizing: border-box;
 }
+.tabbar-placeholder, .tabbar-row { height: 100rpx; }
+.tabbar-row { display: flex; align-items: center; }
+.tabbar-entry { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; }
+.tabbar-entry.active::after { content: ''; position: absolute; bottom: 4rpx; left: 50%; width: 25rpx; height: 5rpx; border-radius: 6rpx; background: #5f9b61; transform: translateX(-50%); }
 // 中间鼓包的样式
 .bulge {
   position: absolute;

@@ -57,6 +57,7 @@ export interface FoodRecordInput {
   negativeTags: string[]
   price: number | null
   imageUrl: string
+  imageUrls: string[]
   rating: number
 }
 

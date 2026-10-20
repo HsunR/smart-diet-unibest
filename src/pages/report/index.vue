@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import type { FoodRecord, MealType } from '@/api/types/smartdiet'
-import { absoluteAssetUrl, deleteRecord, getRecordHistory, updateRecord } from '@/api/smartdiet'
+import { absoluteAssetUrl, deleteRecord, getRecordHistory, updateRecord, uploadFoodImage } from '@/api/smartdiet'
 import { useTokenStore } from '@/store'
-import { formatDate, mealOptions, startOfWeek } from '@/utils/smartdiet'
+import { chooseImages, formatDate, mealOptions, startOfWeek } from '@/utils/smartdiet'
 
 definePage({
   style: {
     navigationBarTitleText: '饮食报告',
-    navigationBarBackgroundColor: '#f6fbf7',
+    navigationBarBackgroundColor: '#faf8f1',
     enablePullDownRefresh: true,
   },
 })
@@ -28,6 +28,7 @@ const detailIndex = ref(0)
 const editing = ref(false)
 const editRecord = ref<FoodRecord | null>(null)
 const saving = ref(false)
+const uploadingPhotos = ref(false)
 const mealLabels = mealOptions.map(item => item.label)
 
 const weekDays = computed<WeekDay[]>(() => {
@@ -71,6 +72,49 @@ const averageScore = computed(() => {
 })
 
 const detail = computed(() => detailRecords.value[detailIndex.value] || null)
+
+function photos(record: FoodRecord) {
+  return record.imageUrls?.length ? record.imageUrls : (record.imageUrl ? [record.imageUrl] : [])
+}
+
+function previewPhoto(url: string, urls: string[]) {
+  uni.previewImage({ urls: urls.map(absoluteAssetUrl), current: absoluteAssetUrl(url) })
+}
+
+async function addEditPhotos() {
+  const current = editRecord.value
+  if (!current || uploadingPhotos.value || saving.value)
+    return
+  current.imageUrls = photos(current)
+  if (current.imageUrls.length >= 6)
+    return
+  try {
+    const paths = await chooseImages(6 - current.imageUrls.length)
+    uploadingPhotos.value = true
+    const results = await Promise.allSettled(paths.map(path => uploadFoodImage(path)))
+    for (const result of results) {
+      if (result.status === 'fulfilled')
+        current.imageUrls.push(result.value.url)
+    }
+    if (results.some(result => result.status === 'rejected'))
+      uni.showToast({ title: '部分照片上传失败，请重试', icon: 'none' })
+  }
+  catch (error) {
+    const message = error instanceof Error ? error.message : '图片上传失败'
+    if (!message.includes('cancel'))
+      uni.showToast({ title: message, icon: 'none' })
+  }
+  finally {
+    uploadingPhotos.value = false
+  }
+}
+
+function removeEditPhoto(index: number) {
+  if (editRecord.value && !uploadingPhotos.value && !saving.value) {
+    editRecord.value.imageUrls.splice(index, 1)
+    editRecord.value.imageUrl = editRecord.value.imageUrls[0] || ''
+  }
+}
 
 async function loadWeek() {
   if (!tokenStore.updateNowTime().hasLogin) {
@@ -149,7 +193,7 @@ function onEditMealChange(event: { detail: { value: string } }) {
 }
 
 async function saveEdit() {
-  if (!editRecord.value)
+  if (!editRecord.value || uploadingPhotos.value)
     return
   saving.value = true
   try {
@@ -161,6 +205,7 @@ async function saveEdit() {
       negativeTags: editRecord.value.negativeTags,
       price: editRecord.value.price,
       rating: editRecord.value.rating,
+      imageUrls: photos(editRecord.value),
     })
     const recordIndex = records.value.findIndex(item => item.id === updated.id)
     if (recordIndex >= 0)
@@ -208,6 +253,12 @@ function removeCurrent() {
 
 <template>
   <view class="report-page">
+    <view class="report-intro">
+      <text class="report-eyebrow">饮食回顾 · 每周一点进步</text>
+      <text class="report-headline">一周的饮食故事</text>
+      <text class="report-description">看看这一周，哪些味道值得记住。</text>
+      <text class="report-ornament">✦</text>
+    </view>
     <view class="week-nav">
       <view class="nav-button" @click="shiftWeek(-1)">
         ‹
@@ -252,7 +303,7 @@ function removeCurrent() {
             </view>
             <view v-for="day in weekDays" :key="`${meal.value}-${day.date}`" class="record-cell" :class="{ today: day.isToday }" @click="openCell(day.date, meal.value)">
               <template v-if="cellRecords(day.date, meal.value).length">
-                <image v-if="cellRecords(day.date, meal.value)[0].imageUrl" class="cell-image" :src="absoluteAssetUrl(cellRecords(day.date, meal.value)[0].imageUrl)" mode="aspectFill" />
+                <image v-if="photos(cellRecords(day.date, meal.value)[0]).length" class="cell-image" :src="absoluteAssetUrl(photos(cellRecords(day.date, meal.value)[0])[0])" mode="aspectFill" />
                 <text class="cell-score">{{ cellRecords(day.date, meal.value)[0].rating || '-' }}★</text>
                 <text class="cell-food">{{ cellRecords(day.date, meal.value)[0].name || '已记录' }}</text>
                 <text v-if="cellRecords(day.date, meal.value).length > 1" class="record-count">+{{ cellRecords(day.date, meal.value).length - 1 }}</text>
@@ -292,7 +343,7 @@ function removeCurrent() {
         </view>
 
         <template v-if="!editing">
-          <image v-if="detail.imageUrl" class="detail-image" :src="absoluteAssetUrl(detail.imageUrl)" mode="aspectFill" />
+          <scroll-view v-if="photos(detail).length" class="detail-photo-strip" scroll-x :show-scrollbar="false"><view class="detail-photo-row"><image v-for="(url, index) in photos(detail)" :key="`${url}-${index}`" class="detail-image" :src="absoluteAssetUrl(url)" mode="aspectFill" @click="previewPhoto(url, photos(detail))" /></view></scroll-view>
           <view class="detail-score-row">
             <view><text class="detail-score">{{ detail.rating || '--' }}</text><text class="detail-score-unit">星</text></view><text class="rating">{{ detail.rating ? '★'.repeat(detail.rating) : '未评分' }}</text>
           </view>
@@ -333,6 +384,7 @@ function removeCurrent() {
           <view class="edit-field vertical">
             <text>饮食描述</text><textarea v-model="editRecord.description" auto-height :maxlength="1000" />
           </view>
+          <view class="edit-field vertical"><text>餐食照片（{{ photos(editRecord).length }}/6）</text><view class="edit-photo-grid"><view v-for="(url, index) in photos(editRecord)" :key="`${url}-${index}`" class="edit-photo"><image :src="absoluteAssetUrl(url)" mode="aspectFill" @click="previewPhoto(url, photos(editRecord))" /><text class="edit-photo-remove" @click.stop="removeEditPhoto(index)">×</text></view><view v-if="photos(editRecord).length < 6" class="edit-photo-add" @click="addEditPhotos">{{ uploadingPhotos ? '上传中' : '＋ 添加' }}</view></view></view>
           <view class="edit-field">
             <text>饮食价格</text><input v-model.number="editRecord.price" type="digit" placeholder="未填写">
           </view>
@@ -342,7 +394,7 @@ function removeCurrent() {
           <view class="sheet-actions">
             <button class="danger-button" @click="editing = false">
               取消
-            </button><button class="edit-button" :loading="saving" @click="saveEdit">
+            </button><button class="edit-button" :disabled="uploadingPhotos" :loading="saving" @click="saveEdit">
               保存修改
             </button>
           </view>
@@ -682,6 +734,14 @@ function removeCurrent() {
   margin-top: 22rpx;
   border-radius: 26rpx;
 }
+.detail-photo-strip { width: 100%; margin-top: 22rpx; }
+.detail-photo-row { display: flex; gap: 12rpx; }
+.detail-photo-row .detail-image { width: 300rpx; height: 300rpx; flex: none; margin-top: 0; }
+.edit-photo-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10rpx; width: 100%; }
+.edit-photo, .edit-photo-add { position: relative; height: 132rpx; border-radius: 15rpx; overflow: hidden; }
+.edit-photo image { width: 100%; height: 100%; }
+.edit-photo-remove { position: absolute; top: 4rpx; right: 4rpx; width: 30rpx; height: 30rpx; border-radius: 50%; color: #fff; background: rgba(26, 45, 31, .75); line-height: 28rpx; text-align: center; }
+.edit-photo-add { border: 2rpx dashed #b9cfb2; color: #5c845d; background: #f5f9ef; display: flex; align-items: center; justify-content: center; }
 .detail-score-row {
   margin-top: 22rpx;
   display: flex;
@@ -862,4 +922,36 @@ function removeCurrent() {
     transform: rotate(360deg);
   }
 }
+.report-page { background: #faf8f1; color: var(--sd-forest); }
+.report-intro { position: relative; overflow: hidden; padding: 30rpx 29rpx; border: 1rpx solid #e7ecd9; border-radius: 30rpx; background: radial-gradient(circle at 90% 10%, #fffdf8 0%, #f3f4e7 50%, #e7efdf 100%); box-shadow: var(--sd-card-shadow); }
+.report-intro::after { content: ''; position: absolute; width: 220rpx; height: 220rpx; top: -90rpx; right: -50rpx; border: 1rpx solid rgba(88, 136, 80, 0.19); border-radius: 50%; }
+.report-eyebrow, .report-headline, .report-description { position: relative; z-index: 1; display: block; }
+.report-eyebrow { color: #5e9668; font-size: 20rpx; font-weight: 700; letter-spacing: 1rpx; }
+.report-headline { margin-top: 11rpx; color: #173d2a; font-size: 38rpx; font-weight: 800; }
+.report-description { margin-top: 7rpx; color: #738477; font-size: 21rpx; }
+.report-ornament { position: absolute; right: 37rpx; bottom: 12rpx; color: #d3aa6d; font-size: 62rpx; }
+.week-nav { height: 112rpx; }
+.nav-button { border: 1rpx solid #e9ede3; border-radius: 19rpx; color: #457452; background: #fffefa; box-shadow: 0 5rpx 16rpx rgba(41, 73, 49, 0.04); }
+.week-title { color: #214631; font-size: 27rpx; }
+.week-range { color: #7e947f; }
+.summary-row { padding: 30rpx 24rpx; border: 1rpx solid #e9eddd; border-radius: 30rpx; color: #244b32; background: linear-gradient(120deg, #edf4e7, #fffaf0); box-shadow: var(--sd-card-shadow); }
+.summary-main { border-right-color: #d9e4d3; }
+.summary-eyebrow, .summary-row .stat-label { color: #708d74; }
+.summary-score { color: #2c7544; }
+.summary-unit { color: #608463; }
+.summary-row .stat-value { color: #275d3c; }
+.section-card { border: 1rpx solid #eeeae0; border-radius: 29rpx; background: #fffefa; box-shadow: var(--sd-card-shadow); }
+.section-heading { color: #254633; }
+.section-hint { color: #8c9c8d; }
+.grid-header { color: #7f947e; background: #f5f7ee; }
+.grid-header.today { color: #2c7544; background: #e6f0e1; }
+.meal-cell { background: #fafbf5; border-color: #edf0e7; }
+.record-cell { background: #fffefa; border-color: #edf0e7; }
+.record-cell.today { background: #f5f9ef; }
+.add-mark { color: #9bb69d; }
+.bar-track { background: #e9eee3; }
+.bar-value { background: linear-gradient(180deg, #94b977, #3b8653); }
+.todayText, .detail-score { color: #317949; }
+.detail-sheet { background: #fffefa; }
+.edit-button { background: #317949; }
 </style>

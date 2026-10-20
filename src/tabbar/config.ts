@@ -45,8 +45,8 @@ export const customTabbarList: CustomTabBarItem[] = [
     text: '记录',
     pagePath: 'pages/chat/index',
     iconType: 'image',
-    icon: '/static/smartdiet-tabbar/camera.svg',
-    iconActive: '/static/smartdiet-tabbar/camera-active.svg',
+    icon: '/static/smartdiet-tabbar/record.svg',
+    iconActive: '/static/smartdiet-tabbar/record-active.svg',
   },
   // 鼓包配置示例（2025-12-31）
   // 中间鼓包tabbarItem配置：通常是扫描按钮、发布按钮、更多按钮等，点击触发业务逻辑
@@ -63,15 +63,15 @@ export const customTabbarList: CustomTabBarItem[] = [
     pagePath: 'pages/report/index',
     text: '报告',
     iconType: 'image',
-    icon: '/static/smartdiet-tabbar/report.svg',
-    iconActive: '/static/smartdiet-tabbar/report-active.svg',
+    icon: '/static/smartdiet-tabbar/insights.svg',
+    iconActive: '/static/smartdiet-tabbar/insights-active.svg',
   },
   {
     pagePath: 'pages/profile/index',
     text: '我的',
     iconType: 'image',
-    icon: '/static/smartdiet-tabbar/profile.svg',
-    iconActive: '/static/smartdiet-tabbar/profile-active.svg',
+    icon: '/static/smartdiet-tabbar/account.svg',
+    iconActive: '/static/smartdiet-tabbar/account-active.svg',
   },
 
   // 其他类型演示
@@ -127,8 +127,8 @@ const _tabbar: TabBar = {
   // 只有微信小程序支持 custom。App 和 H5 不生效
   custom: selectedTabbarStrategy === TABBAR_STRATEGY_MAP.CUSTOM_TABBAR,
   color: '#999999',
-  selectedColor: '#018d71',
-  backgroundColor: '#F8F8F8',
+  selectedColor: '#286b42',
+  backgroundColor: '#fffefa',
   borderStyle: 'black',
   height: '50px',
   fontSize: '10px',

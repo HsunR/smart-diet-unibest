@@ -13,8 +13,10 @@ export interface UiMessage {
 
 export interface FoodDraft {
   /** 图片仅作为饮食记录附件，不触发 AI 识别。 */
-  localImageUrl: string
-  imageUrl: string
+  imageUrls: string[]
+  /** 兼容升级前保存在本地的草稿。 */
+  localImageUrl?: string
+  imageUrl?: string
   date: string
   mealType: MealType
   name: string

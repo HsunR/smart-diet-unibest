@@ -75,7 +75,7 @@ async function handleWechatLogin() {
     <view class="hero-glow hero-glow-two" />
     <view class="brand">
       <view class="logo-ring">
-        <text class="logo">🥗</text>
+        <image class="logo-illustration" src="/static/images/meal-bowl-illustration.png" mode="aspectFit" />
       </view>
       <text class="title">SmartDiet</text>
       <text class="subtitle">你的饮食记录助手</text>
@@ -295,4 +295,24 @@ async function handleWechatLogin() {
   font-size: 20rpx;
   margin-top: 24rpx;
 }
+.login-page { padding-top: calc(var(--status-bar-height) + 34rpx); overflow-x: hidden; overflow-y: auto; background: radial-gradient(circle at 80% 18%, #fffaf0 0%, #f3f4e7 48%, #e8f0e3 100%); }
+.hero-glow-one { background: rgba(154, 195, 136, 0.27); }
+.hero-glow-two { background: rgba(247, 215, 160, 0.25); }
+.logo-ring { width: 230rpx; height: 200rpx; border-radius: 50%; background: rgba(255, 255, 255, 0.55); box-shadow: none; transform: none; }
+.logo-illustration { width: 235rpx; height: 205rpx; filter: drop-shadow(0 12rpx 15rpx rgba(60, 75, 38, 0.16)); }
+.title { margin-top: 8rpx; color: #173d2b; font-size: 58rpx; }
+.subtitle { color: #407f50; font-size: 27rpx; letter-spacing: 4rpx; }
+.description { margin-top: 15rpx; color: #718473; font-size: 23rpx; text-align: center; }
+.feature-card { margin-top: 33rpx; padding: 11rpx 24rpx; border-color: #ecece0; border-radius: 30rpx; background: rgba(255, 254, 250, 0.88); box-shadow: var(--sd-card-shadow); }
+.feature { padding: 15rpx 8rpx; }
+.feature + .feature { border-top: 1rpx solid #eff0e8; }
+.feature-icon { background: #eaf2e6; }
+.feature-title { color: #244731; font-size: 25rpx; }
+.feature-desc { color: #849686; font-size: 21rpx; }
+.web-login-card { margin-top: 25rpx; border: 1rpx solid #edece2; background: rgba(255, 254, 251, 0.96); box-shadow: var(--sd-card-shadow); }
+.mode-tabs { color: #829487; }
+.mode-tabs text.active { color: #2e7546; }
+.web-input { border-color: #e4e9df; background: #fafbf6; }
+.login-button { border-radius: 999rpx; background: linear-gradient(120deg, #438d58, #276e45); box-shadow: 0 12rpx 24rpx rgba(45, 111, 68, 0.18); }
+.agreement { color: #87978a; }
 </style>

@@ -7,7 +7,7 @@ import { chooseImage, formatDate } from '@/utils/smartdiet'
 definePage({
   style: {
     navigationBarTitleText: '我的',
-    navigationBarBackgroundColor: '#f6fbf7',
+    navigationBarBackgroundColor: '#faf8f1',
   },
 })
 
@@ -107,6 +107,7 @@ function logout() {
 
 <template>
   <view class="profile-page">
+    <view class="profile-intro"><text class="profile-kicker">个人空间 · 饮食日记</text><text class="profile-title">把每一天，好好收藏。</text></view>
     <view class="profile-hero">
       <view class="hero-orb" />
       <view class="avatar-wrap" @click="changeAvatar">
@@ -475,4 +476,29 @@ function logout() {
   color: #c0524c;
   background: #fff;
 }
+.profile-page { background: #faf8f1; color: var(--sd-forest); }
+.profile-intro { padding: 12rpx 7rpx 22rpx; }
+.profile-kicker, .profile-title { display: block; }
+.profile-kicker { color: #69a071; font-size: 20rpx; font-weight: 700; letter-spacing: 1rpx; }
+.profile-title { margin-top: 9rpx; color: #173d2b; font-size: 35rpx; font-weight: 800; }
+.profile-hero { border: 1rpx solid #e6eddc; color: #214430; background: radial-gradient(circle at 90% 10%, #fffdf8 0%, #f1f3e5 55%, #e4eedf 100%); box-shadow: var(--sd-card-shadow); }
+.hero-orb { background: rgba(112, 165, 100, 0.11); }
+.avatar { border-color: #fffefa; background: #e4efe1; box-shadow: 0 8rpx 20rpx rgba(45, 80, 47, 0.09); }
+.avatar-edit { color: #367a4c; }
+.nickname, .nickname-input { color: #214430; }
+.nickname-input { border-bottom-color: #a5c5a1; }
+.goal-badge { color: #5e8864; }
+.edit-trigger { border: 1rpx solid #cddfc8; color: #3c7950; background: rgba(255, 255, 255, 0.75); font-weight: 700; }
+.stats-card, .info-card { border: 1rpx solid #eeece3; background: #fffefa; box-shadow: var(--sd-card-shadow); }
+.stat-value, .stat-value.green { color: #2e7546; }
+.stat-label { color: #7d907e; }
+.section-title { color: #264a35; }
+.info-row { border-bottom-color: #eff0e8; }
+.info-icon { width: 52rpx; height: 52rpx; margin-right: 12rpx; border-radius: 16rpx; background: #edf3e8; font-size: 26rpx; display: flex; align-items: center; justify-content: center; }
+.info-label { color: #4e6f58; }
+.info-value, .number-value { color: #536f5c; }
+.gender-buttons text.active { color: #2e7546; background: #e6f2e2; }
+.save-button { border-radius: 999rpx; background: #317949; }
+.cancel-button { border-radius: 999rpx; background: #edf0e8; }
+.logout-button { border: 1rpx solid #f1e5dc; border-radius: 999rpx; background: #fffefa; }
 </style>

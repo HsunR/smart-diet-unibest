@@ -55,3 +55,20 @@ export function chooseImage(sourceType: Array<'camera' | 'album'> = ['camera', '
     })
   })
 }
+
+export function chooseImages(count: number) {
+  return new Promise<string[]>((resolve, reject) => {
+    uni.chooseImage({
+      count,
+      sourceType: ['camera', 'album'],
+      sizeType: ['compressed'],
+      success(result) {
+        const paths = Array.isArray(result.tempFilePaths) ? result.tempFilePaths : (result.tempFilePaths ? [result.tempFilePaths] : [])
+        paths.length ? resolve(paths) : reject(new Error('没有选择图片'))
+      },
+      fail(error) {
+        reject(new Error(error.errMsg || '选择图片失败'))
+      },
+    })
+  })
+}
