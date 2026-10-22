@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { MealType } from '@/api/types/smartdiet'
 import { absoluteAssetUrl, createRecord, getRecords, uploadFoodImage } from '@/api/smartdiet'
+import DateCalendar from '@/components/DateCalendar.vue'
 import { useChatStore, useTokenStore } from '@/store'
-import { chooseImages, formatDate, getCurrentMealType, mealOptions } from '@/utils/smartdiet'
+import { chooseImages, formatDate, getCurrentMealType, mealOptions, relativeDateLabel, shortDateLabel } from '@/utils/smartdiet'
 
 definePage({
   type: 'home',
@@ -13,11 +14,20 @@ const recordStore = useChatStore()
 const tokenStore = useTokenStore()
 const dailyScore = ref(0)
 const todayRecordCount = ref(0)
-const mealLabels = mealOptions.map(item => item.label)
 const positiveTagOptions = ['好吃', '新鲜', '营养均衡', '高蛋白', '蔬菜丰富', '饱腹感强']
 const negativeTagOptions = ['太油', '太咸', '太甜', '不新鲜', '分量不足', '价格偏高']
+const moodOptions = [
+  { icon: '😄', label: '很满意' },
+  { icon: '🙂', label: '还不错' },
+  { icon: '😐', label: '一般' },
+  { icon: '🙁', label: '不太好' },
+  { icon: '😟', label: '不喜欢' },
+]
 const maxPhotos = 6
 const uploadingPhotos = ref(false)
+const showDateCalendar = ref(false)
+const showDescription = ref(false)
+const showTagDetails = ref(true)
 const draft = computed(() => recordStore.draft)
 
 function ensureLogin() {
@@ -32,6 +42,10 @@ function normalizeDraft() {
   const current = recordStore.draft
   if (!current)
     return
+  if (current.saved) {
+    recordStore.draft = null
+    return
+  }
   if (!Array.isArray(current.imageUrls))
     current.imageUrls = current.imageUrl ? [current.imageUrl] : []
   current.name ||= ''
@@ -73,6 +87,15 @@ function startRecord() {
     saving: false,
     saved: false,
   }
+  showDescription.value = false
+  showTagDetails.value = true
+  showDateCalendar.value = false
+}
+
+function selectRecordDate(value: string) {
+  if (draft.value)
+    draft.value.date = value
+  showDateCalendar.value = false
 }
 
 function closeRecord() {
@@ -126,11 +149,6 @@ function removeRecordImage(index: number) {
   draft.value.imageUrls.splice(index, 1)
 }
 
-function onMealChange(event: { detail: { value: string } }) {
-  if (recordStore.draft)
-    recordStore.draft.mealType = mealOptions[Number(event.detail.value)]?.value || 'other'
-}
-
 function toggleTag(kind: 'positive' | 'negative', tag: string) {
   const current = recordStore.draft
   if (!current)
@@ -175,6 +193,7 @@ async function saveDraft() {
       rating: current.rating,
     })
     current.saved = true
+    recordStore.draft = null
     uni.showToast({ title: '记录已保存', icon: 'success' })
     await refreshTodayRecords()
   }
@@ -187,7 +206,7 @@ async function saveDraft() {
 }
 
 function handlePrimaryAction() {
-  if (!draft.value || draft.value.saved)
+  if (!draft.value)
     startRecord()
   else
     saveDraft()
@@ -208,17 +227,19 @@ onShow(() => {
 </script>
 
 <template>
-  <view class="record-page">
-    <view class="record-header pt-safe">
-      <view>
+  <view class="record-page" :class="{ 'record-page-form': !!draft }">
+    <view class="record-header pt-safe" :class="{ 'form-mode': !!draft }">
+      <view v-if="draft" class="header-back" @click="closeRecord">‹</view>
+      <view class="header-main">
         <text class="header-title">饮食记录</text>
-        <view class="header-subtitle"><text class="online-dot" />手动记录每一餐</view>
+        <view v-if="!draft" class="header-subtitle"><text class="online-dot" />手动记录每一餐</view>
       </view>
-      <view class="score-pill"><text class="score-value">{{ dailyScore || '--' }}</text><text class="score-label">今日星级</text></view>
+      <view v-if="!draft" class="score-pill"><text class="score-value">{{ dailyScore || '--' }}</text><text class="score-label">今日星级</text></view>
+      <view v-else class="header-leaves" aria-hidden="true">❦</view>
     </view>
 
     <scroll-view class="record-scroll" scroll-y :show-scrollbar="false">
-      <view class="record-content">
+      <view class="record-content" :class="{ 'form-content': !!draft }">
         <template v-if="!draft">
           <view class="empty-hero">
             <view class="hero-kicker"><text class="kicker-dot" /> 今日饮食 · 用心记录</view>
@@ -237,53 +258,50 @@ onShow(() => {
               <view class="step-connector" />
               <view class="guide-step"><view class="step-icon">♡</view><text class="step-number">02</text><text class="step-label">记下感受</text></view>
               <view class="step-connector" />
-              <view class="guide-step"><view class="step-icon">★</view><text class="step-number">03</text><text class="step-label">给出评分</text></view>
+              <view class="guide-step"><view class="step-icon">✓</view><text class="step-number">03</text><text class="step-label">完成记录</text></view>
             </view>
           </view>
         </template>
 
         <view v-else class="form-layout">
           <view class="form-hero">
-            <view class="form-heading-row"><text class="form-back" @click="closeRecord">‹</text><text class="form-kicker">今日饮食 · 新记录</text></view>
             <text class="form-title">这一餐，吃了什么？</text>
-            <text class="form-intro">花一分钟，记下味道和当时的心情。</text>
-            <image class="form-art" src="/static/images/meal-bowl-illustration.png" mode="aspectFit" />
+            <view class="form-title-underline" />
+            <image class="form-art" src="/static/images/meal-form-avocado.png" mode="aspectFit" />
             <view class="record-fields">
-              <picker mode="date" :value="draft.date" @change="draft.date = $event.detail.value"><view class="field-pill">📅 <text>{{ draft.date }}</text><text class="pill-arrow">⌄</text></view></picker>
-              <picker :range="mealLabels" :value="mealOptions.findIndex(item => item.value === draft?.mealType)" @change="onMealChange"><view class="field-pill">🍽 <text>{{ mealOptions.find(item => item.value === draft?.mealType)?.label }}</text><text class="pill-arrow">⌄</text></view></picker>
+              <view class="date-trigger" @click="showDateCalendar = true"><text class="date-icon">▦</text><view class="date-copy"><text class="date-relative">{{ relativeDateLabel(draft.date) }}</text><text class="date-value">{{ shortDateLabel(draft.date) }}</text></view><text class="pill-arrow">⌄</text></view>
+              <view v-for="meal in mealOptions" :key="meal.value" class="meal-choice" :class="{ active: draft.mealType === meal.value }" @click="draft.mealType = meal.value"><text class="meal-choice-icon">{{ meal.icon }}</text><text class="meal-choice-label">{{ meal.label }}</text></view>
             </view>
           </view>
 
           <view class="form-section">
-            <view class="section-heading"><view class="section-heading-main"><text class="section-index">01</text><text class="section-title">餐食信息</text></view><text class="section-hint">先从名字开始</text></view>
-            <view class="form-field"><text class="field-label required">饮食名称</text><input v-model="draft.name" class="form-input" placeholder="例如：番茄鸡蛋面" :maxlength="120"></view>
-            <view class="form-field"><text class="field-label">饮食描述 <text class="optional">可选</text></text><textarea v-model="draft.description" class="form-textarea" auto-height placeholder="说说口味、食材，或这一餐的感受…" :maxlength="1000" /></view>
+            <view class="section-heading"><view class="section-heading-main"><text class="section-index">🍴</text><text class="section-title">餐食信息</text></view></view>
             <view class="form-field"><view class="photo-label-row"><text class="field-label">餐食照片 <text class="optional">可选</text></text><text class="photo-count">{{ draft.imageUrls.length }}/{{ maxPhotos }}</text></view>
               <view class="photo-grid">
                 <view v-for="(url, index) in draft.imageUrls" :key="`${url}-${index}`" class="photo-tile"><image :src="absoluteAssetUrl(url)" mode="aspectFill" @click="preview(url, draft.imageUrls)" /><view class="photo-remove" @click.stop="removeRecordImage(index)">×</view></view>
                 <view v-if="draft.imageUrls.length < maxPhotos" class="photo-add" @click="chooseRecordImages"><text class="photo-add-icon">{{ uploadingPhotos ? '◌' : '＋' }}</text><text>{{ uploadingPhotos ? '上传中' : '添加照片' }}</text></view>
               </view>
-              <text class="photo-help">可多选上传，最多 6 张 · 不进行 AI 识别</text>
+              <text class="photo-help">最多 6 张 · 图片不会进行 AI 识别</text>
             </view>
+            <view class="form-field"><text class="field-label required">饮食名称</text><input v-model="draft.name" class="form-input" placeholder="例如：番茄鸡蛋面" :maxlength="120"></view>
+            <view class="form-field"><text class="field-label">饮食价格 <text class="optional">可选</text></text><view class="price-input-wrap"><text>¥</text><input :value="draft.price === null ? '' : String(draft.price)" type="digit" class="price-input" placeholder="0.00" @input="onPriceInput" /></view></view>
+            <view class="optional-toggle" @click="showDescription = !showDescription"><text>{{ showDescription || draft.description ? '饮食描述（可选）' : '＋ 添加饮食描述（可选）' }}</text><text>{{ showDescription ? '⌃' : '⌄' }}</text></view>
+            <view v-if="showDescription || draft.description" class="description-field"><textarea v-model="draft.description" class="form-textarea" auto-height placeholder="记录口味、食材或这一餐的故事…" :maxlength="1000" /></view>
           </view>
 
           <view class="form-section">
-            <view class="section-heading"><view class="section-heading-main"><text class="section-index">02</text><text class="section-title">这一餐的感受</text></view><text class="section-hint">轻触标签即可选择</text></view>
-            <view class="form-field"><text class="field-label">喜欢的地方 <text class="label-emoji">♡</text></text><view class="tag-picker"><text v-for="tag in positiveTagOptions" :key="tag" class="selectable-tag positive" :class="{ selected: draft.positiveTags.includes(tag) }" @click="toggleTag('positive', tag)">{{ tag }}</text></view></view>
-            <view class="form-field"><text class="field-label">可以更好的地方 <text class="label-emoji">✳</text></text><view class="tag-picker"><text v-for="tag in negativeTagOptions" :key="tag" class="selectable-tag negative" :class="{ selected: draft.negativeTags.includes(tag) }" @click="toggleTag('negative', tag)">{{ tag }}</text></view></view>
-          </view>
-
-          <view class="form-section final-section">
-            <view class="section-heading"><view class="section-heading-main"><text class="section-index">03</text><text class="section-title">最后补充一下</text></view></view>
-            <view class="form-field"><text class="field-label">饮食价格 <text class="optional">可选</text></text><view class="price-input-wrap"><text>¥</text><input :value="draft.price === null ? '' : String(draft.price)" type="digit" class="price-input" placeholder="0.00" @input="onPriceInput" /></view></view>
-            <view class="rating-block"><view><text class="field-label">这一餐，打几星？</text><text class="rating-note">按自己的感受来就好</text></view><view class="rating-stars"><text v-for="star in 5" :key="star" class="star" :class="{ active: star <= draft.rating }" @click="draft.rating = star">★</text></view></view>
-            <view v-if="draft.saved" class="saved-message">✓ 已保存，可以在饮食报告中查看</view>
+            <view class="section-heading"><view class="section-heading-main"><text class="section-index">♥</text><text class="section-title">这一餐的感受</text></view></view>
+            <view class="mood-picker"><view v-for="(mood, index) in moodOptions" :key="mood.label" class="mood-choice" :class="[`mood-${index}`, { selected: draft.rating === 5 - index }]" @click="draft.rating = 5 - index"><text class="mood-icon">{{ mood.icon }}</text><text class="mood-label">{{ mood.label }}</text></view></view>
+            <view class="optional-toggle tag-toggle" @click="showTagDetails = !showTagDetails"><text>{{ showTagDetails ? '具体感受（可选）' : `＋ 添加具体感受（可选）${draft.positiveTags.length + draft.negativeTags.length ? ` · 已选 ${draft.positiveTags.length + draft.negativeTags.length}` : ''}` }}</text><text>{{ showTagDetails ? '⌃' : '⌄' }}</text></view>
+            <view v-if="showTagDetails" class="tag-details"><view class="form-field"><text class="field-label">喜欢的地方 <text class="label-emoji">♡</text></text><view class="tag-picker"><text v-for="tag in positiveTagOptions" :key="tag" class="selectable-tag positive" :class="{ selected: draft.positiveTags.includes(tag) }" @click="toggleTag('positive', tag)">{{ tag }}</text></view></view>
+              <view class="form-field"><text class="field-label">可以更好的地方 <text class="label-emoji">✳</text></text><view class="tag-picker"><text v-for="tag in negativeTagOptions" :key="tag" class="selectable-tag negative" :class="{ selected: draft.negativeTags.includes(tag) }" @click="toggleTag('negative', tag)">{{ tag }}</text></view></view></view>
           </view>
         </view>
       </view>
     </scroll-view>
 
-    <view class="action-bar pb-safe"><button class="record-button" :disabled="!!draft && !draft.saved && (!draft.name.trim() || draft.saving || uploadingPhotos)" :loading="draft?.saving" @click="handlePrimaryAction"><text>{{ !draft ? '开始记录这一餐' : draft.saved ? '再填写一餐' : '保存这一餐' }}</text><text class="action-arrow">→</text></button></view>
+    <view class="action-bar pb-safe" :class="{ 'form-action': !!draft }"><button class="record-button" :disabled="!!draft && (!draft.name.trim() || draft.saving || uploadingPhotos)" :loading="draft?.saving" @click="handlePrimaryAction"><text>{{ !draft ? '开始记录这一餐' : '保存这一餐' }}</text><text v-if="!draft" class="action-arrow">→</text></button></view>
+    <DateCalendar :visible="showDateCalendar && !!draft" :selected-date="draft?.date || formatDate(new Date())" mode="day" @close="showDateCalendar = false" @select="selectRecordDate" />
   </view>
 </template>
 
@@ -361,13 +379,6 @@ onShow(() => {
 .selectable-tag.negative.selected { border-color: #e4b47d; color: #9a611d; background: #fff2e3; font-weight: 650; }
 .price-input-wrap { height: 76rpx; padding: 0 21rpx; border: 1rpx solid #e3ebe4; border-radius: 18rpx; color: #319059; background: #f8faf6; font-size: 27rpx; display: flex; align-items: center; gap: 12rpx; }
 .price-input { flex: 1; height: 100%; color: #244532; font-size: 24rpx; }
-.rating-block { display: flex; align-items: center; justify-content: space-between; gap: 8rpx; margin-top: 29rpx; padding-top: 26rpx; border-top: 1rpx solid #eef2ec; }
-.rating-block .field-label { margin-bottom: 4rpx; }
-.rating-note { color: #a2b0a3; font-size: 18rpx; }
-.rating-stars { display: flex; align-items: center; }
-.star { padding-left: 3rpx; color: #dce4db; font-size: 34rpx; line-height: 1; }
-.star.active { color: #efb445; }
-.saved-message { margin-top: 26rpx; padding: 16rpx; border-radius: 15rpx; color: #2b8b50; background: #e9f6e9; font-size: 21rpx; text-align: center; }
 .action-bar { box-sizing: border-box; position: fixed; z-index: 2; right: 0; bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom)); left: 0; height: calc(var(--action-height) + env(safe-area-inset-bottom)); padding: 15rpx 22rpx calc(16rpx + env(safe-area-inset-bottom)); background: rgba(255, 255, 255, 0.98); border-top: 1rpx solid #e9eee7; }
 .record-button { width: 100%; height: 94rpx; border: 0; border-radius: 21rpx; color: #fff; background: #269b58; box-shadow: 0 8rpx 21rpx rgba(38, 155, 88, 0.19); font-size: 26rpx; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 13rpx; }
 .record-button[disabled] { color: #93aa9a; background: #e5eee6; box-shadow: none; }
@@ -421,7 +432,6 @@ onShow(() => {
 .selectable-tag { background: #fafaf6; border-color: #e7ebe2; }
 .selectable-tag.positive.selected { background: #e7f2e1; border-color: #9fc39d; }
 .selectable-tag.negative.selected { background: #fcf0e4; border-color: #e4c8a9; }
-.star.active { color: #e7ad4c; }
 .action-bar { background: rgba(255, 254, 251, 0.98); border-top-color: #f0eee5; }
 .record-button { border-radius: 999rpx; background: linear-gradient(120deg, #438d58, #276e45); box-shadow: 0 12rpx 24rpx rgba(45, 111, 68, 0.2); }
 .record-button { position: relative; }
@@ -435,4 +445,65 @@ onShow(() => {
 .photo-add { border: 2rpx dashed #b9cfb2; background: #f6f9ef; color: #68866a; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5rpx; font-size: 19rpx; }
 .photo-add-icon { color: #4b8752; font-size: 49rpx; line-height: 1; font-weight: 300; }
 .photo-help { display: block; margin-top: 11rpx; color: #9ba99b; font-size: 18rpx; }
+
+/* The entry form follows the warm botanical meal-journal preview. */
+.record-page-form { background: #faf8f1; }
+.record-header.form-mode { padding: 0 25rpx 13rpx; border-bottom: 0; background: #faf8f1; align-items: flex-end; justify-content: center; }
+.record-header.form-mode .header-main { align-self: flex-end; }
+.record-header.form-mode .header-title { font-size: 27rpx; font-weight: 800; letter-spacing: 0; }
+.header-back { position: absolute; bottom: 8rpx; left: 25rpx; width: 55rpx; height: 57rpx; color: #143b2c; font-size: 49rpx; line-height: 51rpx; text-align: center; }
+.header-leaves { position: absolute; right: 21rpx; bottom: 4rpx; width: 65rpx; color: #9ab793; font-size: 62rpx; line-height: 1; transform: rotate(-27deg); opacity: 0.7; }
+.form-content { padding: 0 11rpx 26rpx; }
+.form-layout { gap: 13rpx; }
+.form-hero { min-height: 166rpx; padding: 11rpx 7rpx 0; overflow: visible; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.form-title { z-index: 1; max-width: 76%; margin-top: 4rpx; color: #14382b; font-size: 37rpx; font-weight: 850; line-height: 1.25; }
+.form-title-underline { width: 55rpx; height: 6rpx; margin-top: 13rpx; border-radius: 999rpx; background: #75a268; }
+.form-art { top: -24rpx; right: -5rpx; width: 174rpx; height: 129rpx; filter: drop-shadow(0 7rpx 8rpx rgba(62, 66, 33, 0.15)); }
+.record-fields { flex-wrap: nowrap; align-items: stretch; gap: 8rpx; margin-top: 19rpx; }
+.date-trigger { box-sizing: border-box; flex: 1.95; min-width: 0; height: 65rpx; padding: 0 8rpx; border: 1rpx solid #efede5; border-radius: 16rpx; background: #fff; box-shadow: 0 5rpx 13rpx rgba(47, 58, 42, 0.05); display: flex; align-items: center; justify-content: center; gap: 7rpx; }
+.date-icon { color: #839888; font-size: 26rpx; }
+.date-copy { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+.date-relative { color: #315c3c; font-size: 20rpx; font-weight: 800; line-height: 1.2; }
+.date-value { color: #829085; font-size: 16rpx; line-height: 1.2; white-space: nowrap; }
+.pill-arrow { margin-left: 0; color: #9ba69b; font-size: 19rpx; }
+.meal-choice { flex: 1; min-width: 0; height: 65rpx; border: 1rpx solid #efece5; border-radius: 16rpx; background: #fff; box-shadow: 0 5rpx 13rpx rgba(47, 58, 42, 0.05); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rpx; }
+.meal-choice.active { border-color: #7ca773; background: linear-gradient(135deg, #8bae7b, #56875d); box-shadow: 0 5rpx 13rpx rgba(67, 110, 68, 0.18); }
+.meal-choice-icon { font-size: 25rpx; line-height: 1; }
+.meal-choice-label { color: #8b9487; font-size: 15rpx; font-weight: 650; line-height: 1; }
+.meal-choice.active .meal-choice-label { color: #fff; }
+.form-section { padding: 12rpx 13rpx 15rpx; border: 0; border-radius: 19rpx; background: #fff; box-shadow: 0 5rpx 17rpx rgba(65, 73, 50, 0.045); }
+.section-heading { box-sizing: border-box; min-height: 47rpx; padding: 0 10rpx; border-radius: 12rpx; background: linear-gradient(90deg, #eaf2e9, #f5f8f3); }
+.section-heading-main { gap: 9rpx; }
+.section-index { width: 30rpx; height: 30rpx; border-radius: 9rpx; color: #579159; background: transparent; font-size: 25rpx; font-weight: 800; }
+.section-title { color: #183c2d; font-size: 21rpx; font-weight: 780; }
+.form-field { margin-top: 15rpx; }
+.field-label { margin-bottom: 7rpx; color: #344b3b; font-size: 19rpx; font-weight: 700; }
+.optional { color: #9aa99a; font-size: 17rpx; }
+.form-input, .form-textarea, .price-input-wrap { border-color: #e8eae4; border-radius: 14rpx; background: #fafbf9; }
+.form-input { height: 60rpx; padding: 0 15rpx; font-size: 20rpx; }
+.form-textarea { min-height: 82rpx; padding: 12rpx 15rpx; font-size: 19rpx; }
+.photo-label-row .field-label { margin-bottom: 7rpx; }
+.photo-count { font-size: 16rpx; }
+.photo-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8rpx; }
+.photo-tile, .photo-add { height: 93rpx; border-radius: 13rpx; }
+.photo-add { border: 1rpx dashed #cbd8c8; background: #f9fbf8; gap: 0; font-size: 14rpx; }
+.photo-add-icon { color: #899c8d; font-size: 38rpx; }
+.photo-remove { top: 3rpx; right: 3rpx; width: 26rpx; height: 26rpx; font-size: 21rpx; line-height: 24rpx; }
+.photo-help { margin-top: 6rpx; font-size: 15rpx; }
+.optional-toggle { display: flex; align-items: center; justify-content: space-between; min-height: 38rpx; margin-top: 10rpx; padding: 0 4rpx; border-top: 1rpx solid #f0f2ed; color: #5b8265; font-size: 17rpx; font-weight: 650; }
+.description-field { margin-top: 4rpx; }
+.mood-picker { display: flex; gap: 7rpx; margin-top: 12rpx; }
+.mood-choice { flex: 1; min-width: 0; height: 59rpx; border: 1rpx solid transparent; border-radius: 999rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rpx; }
+.mood-0 { background: #e1f0e0; }.mood-1 { background: #fff1d5; }.mood-2 { background: #fff0e4; }.mood-3 { background: #ffe4e0; }.mood-4 { background: #e9e5f7; }
+.mood-choice.selected { border-color: #70a16b; box-shadow: inset 0 0 0 2rpx #acd3a7, 0 3rpx 8rpx rgba(78, 118, 78, 0.12); }
+.mood-icon { font-size: 29rpx; line-height: 1; }
+.mood-label { color: #748375; font-size: 12rpx; line-height: 1; }
+.tag-toggle { margin-top: 10rpx; }
+.tag-details .form-field { margin-top: 13rpx; }
+.selectable-tag { padding: 8rpx 13rpx; font-size: 17rpx; }
+.price-input-wrap { height: 57rpx; padding: 0 14rpx; font-size: 22rpx; }
+.price-input { font-size: 20rpx; }
+.form-action { height: 89rpx; padding: 6rpx 11rpx 8rpx; border-top: 0; background: linear-gradient(180deg, rgba(250, 248, 241, 0), #faf8f1 25%); }
+.form-action .record-button { height: 71rpx; border-radius: 999rpx; font-size: 24rpx; background: linear-gradient(110deg, #4b9061, #287049); box-shadow: 0 7rpx 15rpx rgba(30, 96, 56, 0.16); }
+.form-action .record-button[disabled] { color: #fff; background: linear-gradient(110deg, #a4bcaa, #8cab96); box-shadow: none; }
 </style>

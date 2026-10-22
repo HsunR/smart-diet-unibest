@@ -6,6 +6,7 @@ import { chooseImage, formatDate } from '@/utils/smartdiet'
 
 definePage({
   style: {
+    navigationStyle: 'custom',
     navigationBarTitleText: '我的',
     navigationBarBackgroundColor: '#faf8f1',
   },
@@ -33,8 +34,9 @@ async function loadProfile() {
     const records = await getRecordHistory(formatDate(start), formatDate(end))
     stats.meals = records.length
     stats.days = new Set(records.map(item => item.date)).size
-    stats.averageScore = records.length
-      ? Math.round(records.reduce((sum, item) => sum + (item.rating || 0), 0) / records.length * 10) / 10
+    const ratedRecords = records.filter(item => item.rating > 0)
+    stats.averageScore = ratedRecords.length
+      ? Math.round(ratedRecords.reduce((sum, item) => sum + item.rating, 0) / ratedRecords.length * 10) / 10
       : 0
   }
   catch (error) {
@@ -107,7 +109,7 @@ function logout() {
 
 <template>
   <view class="profile-page">
-    <view class="profile-intro"><text class="profile-kicker">个人空间 · 饮食日记</text><text class="profile-title">把每一天，好好收藏。</text></view>
+    <view class="profile-intro pt-safe"><text class="profile-title">我的</text><text class="profile-subtitle">把每一天，好好收藏。</text><view class="profile-leaf leaf-a" /><view class="profile-leaf leaf-b" /><view class="profile-leaf leaf-c" /></view>
     <view class="profile-hero">
       <view class="hero-orb" />
       <view class="avatar-wrap" @click="changeAvatar">
@@ -121,27 +123,28 @@ function logout() {
         <text v-else class="nickname">{{ userStore.userInfo.nickname || 'SmartDiet 用户' }}</text>
         <text class="goal-badge">已记录 {{ stats.days }} 天</text>
       </view>
-      <view class="edit-trigger" @click="editing ? saveProfile() : beginEdit()">
-        {{ editing ? '保存' : '编辑' }}
+      <view class="edit-trigger" @click="editing ? editing = false : beginEdit()">
+        {{ editing ? '取消' : '编辑' }}
       </view>
     </view>
 
     <view class="stats-card">
-      <view><text class="stat-value">{{ stats.days }}</text><text class="stat-label">记录天数</text></view>
-      <view class="stat-divider" />
-      <view><text class="stat-value">{{ stats.meals }}</text><text class="stat-label">记录餐次</text></view>
-      <view class="stat-divider" />
-      <view><text class="stat-value green">{{ stats.averageScore || '--' }}</text><text class="stat-label">平均星级</text></view>
+      <view class="stats-heading"><text class="stats-leaf">❧</text><text>近30天</text></view>
+      <view class="stats-grid">
+        <view><text class="stat-value">{{ stats.days }}</text><text class="stat-label">记录天数</text></view>
+        <view class="stat-divider" />
+        <view><text class="stat-value">{{ stats.meals }}</text><text class="stat-label">记录餐次</text></view>
+        <view class="stat-divider" />
+        <view><text class="stat-value green">{{ stats.averageScore || '--' }}</text><text class="stat-label">平均星级</text></view>
+      </view>
     </view>
 
-    <view class="section-title">
-      <text>身体资料</text><text v-if="editing" class="section-note">编辑后点击顶部保存</text>
-    </view>
     <view class="info-card">
+      <view class="section-title"><text class="body-icon">♣</text><text>身体资料</text><text v-if="editing" class="section-note">编辑后点击下方保存</text></view>
       <view class="info-row">
         <text class="info-icon">⚧</text><text class="info-label">性别</text><view v-if="editing" class="gender-buttons">
           <text :class="{ active: editForm.gender === 1 }" @click="editForm.gender = 1">男</text><text :class="{ active: editForm.gender === 2 }" @click="editForm.gender = 2">女</text>
-        </view><text v-else class="info-value">{{ userStore.userInfo.gender === 2 ? '女' : '男' }}</text>
+        </view><text v-else class="info-value">{{ userStore.userInfo.gender === 2 ? '女' : userStore.userInfo.gender === 1 ? '男' : '未填写' }}</text>
       </view>
       <view class="info-row">
         <text class="info-icon">🎂</text><text class="info-label">年龄</text><view class="number-value">
@@ -501,4 +504,39 @@ function logout() {
 .save-button { border-radius: 999rpx; background: #317949; }
 .cancel-button { border-radius: 999rpx; background: #edf0e8; }
 .logout-button { border: 1rpx solid #f1e5dc; border-radius: 999rpx; background: #fffefa; }
+
+/* Profile concept: welcoming identity, thirty-day activity and editable body details. */
+.profile-page { padding: 0 24rpx calc(155rpx + env(safe-area-inset-bottom)); }
+.profile-intro { position: relative; overflow: hidden; min-height: 150rpx; box-sizing: border-box; margin: 0 -24rpx; padding: calc(31rpx + env(safe-area-inset-top)) 38rpx 19rpx; background: linear-gradient(130deg, #faf8f1, #f5f7ed); }
+.profile-title { position: relative; z-index: 1; margin: 0; color: #153d2b; font-size: 48rpx; letter-spacing: 1rpx; }
+.profile-subtitle { position: relative; z-index: 1; display: block; margin-top: 6rpx; color: #7b907d; font-size: 20rpx; }
+.profile-leaf { position: absolute; right: 10rpx; width: 97rpx; height: 36rpx; border-radius: 95% 0 95% 0; background: rgba(107, 160, 103, 0.25); transform-origin: right center; }
+.leaf-a { top: 18rpx; transform: rotate(-25deg); }
+.leaf-b { top: 76rpx; right: 67rpx; transform: rotate(27deg); }
+.leaf-c { top: 100rpx; right: -13rpx; transform: rotate(-58deg); }
+.profile-hero { min-height: 204rpx; margin-top: 10rpx; padding: 28rpx; border-radius: 30rpx; gap: 18rpx; background: radial-gradient(circle at 92% 4%, #f8faed 0%, #e9f1df 72%, #dbeacb 100%); }
+.hero-orb { top: -105rpx; right: -55rpx; width: 250rpx; height: 250rpx; background: rgba(255, 255, 255, 0.19); }
+.avatar { width: 124rpx; height: 124rpx; border: 6rpx solid #fffefa; border-radius: 50%; }
+.nickname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 30rpx; }
+.nickname-input { width: 100%; font-size: 27rpx; }
+.goal-badge { display: inline-block; margin-top: 13rpx; padding: 6rpx 14rpx; border-radius: 999rpx; background: rgba(255, 255, 255, 0.56); color: #3d7d4d; font-size: 19rpx; }
+.edit-trigger { flex: none; padding: 12rpx 19rpx; border-radius: 999rpx; font-size: 20rpx; }
+.stats-card { display: block; margin: 22rpx 0; padding: 24rpx 17rpx 29rpx; border-radius: 29rpx; text-align: left; }
+.stats-heading { display: flex; align-items: center; gap: 8rpx; padding: 0 8rpx; color: #648b68; font-size: 22rpx; font-weight: 700; }
+.stats-leaf { color: #83ad7b; font-size: 31rpx; line-height: 1; }
+.stats-grid { display: flex; align-items: center; justify-content: space-around; margin-top: 22rpx; text-align: center; }
+.stats-grid > view:not(.stat-divider) { flex: 1; }
+.stat-value, .stat-value.green { color: #184c34; font-size: 43rpx; line-height: 1.1; }
+.stat-label { margin-top: 8rpx; color: #77887a; font-size: 20rpx; }
+.stat-divider { height: 66rpx; background: #e7ece4; }
+.info-card { padding: 0 25rpx 7rpx; border-radius: 29rpx; }
+.section-title { justify-content: flex-start; gap: 9rpx; margin: 0; padding: 27rpx 0 15rpx; color: #1f4932; font-size: 27rpx; font-weight: 750; }
+.body-icon { color: #75a971; font-size: 30rpx; line-height: 1; }
+.section-note { margin-left: auto; font-size: 17rpx; }
+.info-row { min-height: 92rpx; }
+.info-icon { width: 50rpx; height: 50rpx; margin-right: 16rpx; border-radius: 50%; color: #3f8d57; background: #edf4e9; font-size: 25rpx; }
+.info-row:first-of-type .info-icon { color: #df946e; background: #fff1e8; }
+.info-label { font-size: 23rpx; }
+.info-value, .number-value { color: #1d4932; font-size: 23rpx; font-weight: 650; }
+.logout-button { margin-top: 28rpx; color: #d77c58; font-weight: 650; }
 </style>

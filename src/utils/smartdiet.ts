@@ -14,6 +14,30 @@ export function formatDate(date: Date) {
   return `${year}-${month}-${day}`
 }
 
+export function parseLocalDate(value: string) {
+  const [year, month, day] = value.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
+
+export function shortDateLabel(value: string) {
+  const date = parseLocalDate(value)
+  return `${date.getMonth() + 1}月${date.getDate()}日`
+}
+
+export function relativeDateLabel(value: string) {
+  const date = parseLocalDate(value)
+  const today = new Date()
+  const dayNumber = (item: Date) => Date.UTC(item.getFullYear(), item.getMonth(), item.getDate()) / 86400000
+  const difference = dayNumber(date) - dayNumber(today)
+  if (difference === -1)
+    return '昨天'
+  if (difference === 0)
+    return '今天'
+  if (difference === 1)
+    return '明天'
+  return `周${['日', '一', '二', '三', '四', '五', '六'][date.getDay()]}`
+}
+
 export function startOfWeek(date: Date) {
   const result = new Date(date)
   const day = result.getDay()

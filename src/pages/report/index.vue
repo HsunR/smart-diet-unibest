@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import type { FoodRecord, MealType } from '@/api/types/smartdiet'
 import { absoluteAssetUrl, deleteRecord, getRecordHistory, updateRecord, uploadFoodImage } from '@/api/smartdiet'
+import DateCalendar from '@/components/DateCalendar.vue'
 import { useTokenStore } from '@/store'
-import { chooseImages, formatDate, mealOptions, startOfWeek } from '@/utils/smartdiet'
+import { chooseImages, formatDate, mealOptions, parseLocalDate, shortDateLabel, startOfWeek } from '@/utils/smartdiet'
 
 definePage({
   style: {
+    navigationStyle: 'custom',
     navigationBarTitleText: '饮食报告',
     navigationBarBackgroundColor: '#faf8f1',
     enablePullDownRefresh: true,
@@ -21,10 +23,12 @@ interface WeekDay {
 
 const tokenStore = useTokenStore()
 const focusDate = ref(new Date())
+const showWeekCalendar = ref(false)
 const loading = ref(false)
 const records = ref<FoodRecord[]>([])
 const detailRecords = ref<FoodRecord[]>([])
 const detailIndex = ref(0)
+const detailPhotoIndex = ref(0)
 const editing = ref(false)
 const editRecord = ref<FoodRecord | null>(null)
 const saving = ref(false)
@@ -45,7 +49,24 @@ const weekDays = computed<WeekDay[]>(() => {
   })
 })
 
-const weekRange = computed(() => `${weekDays.value[0]?.date.slice(5)} ~ ${weekDays.value[6]?.date.slice(5)}`)
+const weekRange = computed(() => `${weekDays.value[0]?.date.slice(5).replace('-', '.')} — ${weekDays.value[6]?.date.slice(5).replace('-', '.')}`)
+const weekTitle = computed(() => {
+  const selectedStart = formatDate(startOfWeek(focusDate.value))
+  const thisWeekStart = startOfWeek(new Date())
+  if (selectedStart === formatDate(thisWeekStart))
+    return '本周饮食'
+  const lastWeekStart = new Date(thisWeekStart)
+  lastWeekStart.setDate(lastWeekStart.getDate() - 7)
+  if (selectedStart === formatDate(lastWeekStart))
+    return '上周饮食'
+  const earlierWeekStart = new Date(thisWeekStart)
+  earlierWeekStart.setDate(earlierWeekStart.getDate() - 14)
+  if (selectedStart === formatDate(earlierWeekStart))
+    return '上上周饮食'
+  const nextWeekStart = new Date(thisWeekStart)
+  nextWeekStart.setDate(nextWeekStart.getDate() + 7)
+  return selectedStart === formatDate(nextWeekStart) ? '下周饮食' : '选择的周'
+})
 
 const calendar = computed(() => {
   const data: Record<string, Record<MealType, FoodRecord[]>> = {}
@@ -59,7 +80,7 @@ const calendar = computed(() => {
 })
 
 const dailyScores = computed(() => weekDays.value.map((day) => {
-  const items = records.value.filter(record => record.date === day.date)
+  const items = records.value.filter(record => record.date === day.date && record.rating > 0)
   return {
     ...day,
     score: items.length ? Math.round(items.reduce((sum, item) => sum + (item.rating || 0), 0) / items.length * 10) / 10 : 0,
@@ -67,8 +88,8 @@ const dailyScores = computed(() => weekDays.value.map((day) => {
 }))
 
 const averageScore = computed(() => {
-  const scored = dailyScores.value.filter(item => item.score > 0)
-  return scored.length ? Math.round(scored.reduce((sum, item) => sum + item.score, 0) / scored.length * 10) / 10 : 0
+  const scored = records.value.filter(item => item.rating > 0)
+  return scored.length ? Math.round(scored.reduce((sum, item) => sum + item.rating, 0) / scored.length * 10) / 10 : 0
 })
 
 const detail = computed(() => detailRecords.value[detailIndex.value] || null)
@@ -144,8 +165,9 @@ function shiftWeek(offset: number) {
   loadWeek()
 }
 
-function changeDate(event: { detail: { value: string } }) {
-  focusDate.value = new Date(`${event.detail.value}T12:00:00`)
+function selectWeekDate(value: string) {
+  focusDate.value = parseLocalDate(value)
+  showWeekCalendar.value = false
   loadWeek()
 }
 
@@ -153,7 +175,12 @@ function cellRecords(date: string, mealType: MealType) {
   return calendar.value[date]?.[mealType] || []
 }
 
-function openCell(date: string, mealType: MealType) {
+function loopedCellRecords(date: string, mealType: MealType) {
+  const items = cellRecords(date, mealType)
+  return [...items, ...items]
+}
+
+function openCell(date: string, mealType: MealType, recordIndex = 0) {
   const items = cellRecords(date, mealType)
   if (!items.length) {
     uni.showModal({
@@ -169,16 +196,22 @@ function openCell(date: string, mealType: MealType) {
     return
   }
   detailRecords.value = items
-  detailIndex.value = 0
+  detailIndex.value = recordIndex
+  detailPhotoIndex.value = 0
   editing.value = false
   editRecord.value = null
 }
 
 function closeDetail() {
   detailRecords.value = []
+  detailPhotoIndex.value = 0
   editing.value = false
   editRecord.value = null
 }
+
+watch(detailIndex, () => {
+  detailPhotoIndex.value = 0
+})
 
 function startEdit() {
   if (!detail.value)
@@ -253,21 +286,16 @@ function removeCurrent() {
 
 <template>
   <view class="report-page">
-    <view class="report-intro">
-      <text class="report-eyebrow">饮食回顾 · 每周一点进步</text>
-      <text class="report-headline">一周的饮食故事</text>
-      <text class="report-description">看看这一周，哪些味道值得记住。</text>
-      <text class="report-ornament">✦</text>
+    <view class="report-intro pt-safe">
+      <text class="report-headline">饮食报告</text>
+      <text class="report-description">每一餐，都在描绘你的这一周。</text>
+      <view class="leaf-decoration leaf-one" /><view class="leaf-decoration leaf-two" /><view class="leaf-decoration leaf-three" />
     </view>
     <view class="week-nav">
       <view class="nav-button" @click="shiftWeek(-1)">
         ‹
       </view>
-      <picker mode="date" :value="formatDate(focusDate)" @change="changeDate">
-        <view class="week-picker">
-          <text class="week-title">本周饮食</text><text class="week-range">{{ weekRange }}⌄</text>
-        </view>
-      </picker>
+      <view class="week-picker" @click="showWeekCalendar = true"><view class="week-calendar-icon">▦</view><view class="week-picker-copy"><text class="week-title">{{ weekTitle }}</text><text class="week-range">{{ weekRange }}</text></view><text class="week-chevron">⌄</text></view>
       <view class="nav-button" @click="shiftWeek(1)">
         ›
       </view>
@@ -275,19 +303,17 @@ function removeCurrent() {
 
     <view class="summary-row">
       <view class="summary-main">
-        <text class="summary-eyebrow">本周平均星级</text><view><text class="summary-score">{{ averageScore || '--' }}</text><text class="summary-unit">/ 5</text></view>
+        <text class="summary-eyebrow">本周平均星级</text><view><text class="summary-score">{{ averageScore || '--' }}</text><text class="summary-unit">/ 5</text></view><view class="summary-stars"><text v-for="star in 5" :key="star" :class="{ filled: star <= Math.round(averageScore) }">★</text></view>
       </view>
-      <view class="summary-stat">
-        <text class="stat-value">{{ records.length }}</text><text class="stat-label">已记录餐次</text>
-      </view>
-      <view class="summary-stat">
-        <text class="stat-value">{{ records.filter(item => item.rating).length }}</text><text class="stat-label">已评分餐次</text>
+      <view class="summary-side">
+        <view class="summary-stat"><view class="stat-icon meals-icon">♧</view><view><text class="stat-label">已记录餐次</text><text class="stat-value">{{ records.length }}</text></view></view>
+        <view class="summary-stat"><view class="stat-icon rated-icon">★</view><view><text class="stat-label">已评分餐次</text><text class="stat-value">{{ records.filter(item => item.rating > 0).length }}</text></view></view>
       </view>
     </view>
 
     <view class="section-card calendar-card">
       <view class="section-heading">
-        <text>一周记录</text><text class="section-hint">点击格子查看或添加</text>
+        <view class="section-heading-title"><text class="section-leaf">❧</text><text>一周记录</text></view><text class="section-hint">轻触格子查看或添加</text>
       </view>
       <scroll-view scroll-x class="calendar-scroll" :show-scrollbar="false">
         <view class="calendar-grid">
@@ -302,17 +328,23 @@ function removeCurrent() {
               <text class="meal-icon">{{ meal.icon }}</text><text>{{ meal.label }}</text>
             </view>
             <view v-for="day in weekDays" :key="`${meal.value}-${day.date}`" class="record-cell" :class="{ today: day.isToday }" @click="openCell(day.date, meal.value)">
-              <template v-if="cellRecords(day.date, meal.value).length">
-                <image v-if="photos(cellRecords(day.date, meal.value)[0]).length" class="cell-image" :src="absoluteAssetUrl(photos(cellRecords(day.date, meal.value)[0])[0])" mode="aspectFill" />
-                <text class="cell-score">{{ cellRecords(day.date, meal.value)[0].rating || '-' }}★</text>
-                <text class="cell-food">{{ cellRecords(day.date, meal.value)[0].name || '已记录' }}</text>
-                <text v-if="cellRecords(day.date, meal.value).length > 1" class="record-count">+{{ cellRecords(day.date, meal.value).length - 1 }}</text>
-              </template>
+              <view v-if="cellRecords(day.date, meal.value).length > 1" class="record-marquee-viewport">
+                <view class="record-marquee-track" :style="{ width: `${cellRecords(day.date, meal.value).length * 200}%`, animationDuration: `${cellRecords(day.date, meal.value).length * 7}s` }">
+                  <view v-for="(item, index) in loopedCellRecords(day.date, meal.value)" :key="`${item.id}-${index}`" class="record-slide" :style="{ width: `${100 / (cellRecords(day.date, meal.value).length * 2)}%` }" @click.stop="openCell(day.date, meal.value, index % cellRecords(day.date, meal.value).length)">
+                    <image v-if="photos(item).length" class="cell-image" :src="absoluteAssetUrl(photos(item)[0])" mode="aspectFill" />
+                    <text v-if="item.rating > 0" class="cell-score">{{ item.rating }}★</text>
+                    <text v-if="!photos(item).length" class="cell-food">{{ item.name || '已记录' }}</text>
+                    <text class="record-count">{{ index % cellRecords(day.date, meal.value).length + 1 }}/{{ cellRecords(day.date, meal.value).length }}</text>
+                  </view>
+                </view>
+              </view>
+              <view v-else-if="cellRecords(day.date, meal.value).length" class="record-slide" @click.stop="openCell(day.date, meal.value)"><image v-if="photos(cellRecords(day.date, meal.value)[0]).length" class="cell-image" :src="absoluteAssetUrl(photos(cellRecords(day.date, meal.value)[0])[0])" mode="aspectFill" /><text v-if="cellRecords(day.date, meal.value)[0].rating > 0" class="cell-score">{{ cellRecords(day.date, meal.value)[0].rating }}★</text><text v-if="!photos(cellRecords(day.date, meal.value)[0]).length" class="cell-food">{{ cellRecords(day.date, meal.value)[0].name || '已记录' }}</text></view>
               <text v-else class="add-mark">＋</text>
             </view>
           </template>
         </view>
       </scroll-view>
+      <view v-if="!loading && !records.length" class="calendar-empty">本周还没有记录，轻触 ＋ 添加第一餐</view>
       <view v-if="loading" class="loading-mask">
         <view class="spinner" /><text>加载中</text>
       </view>
@@ -320,7 +352,7 @@ function removeCurrent() {
 
     <view class="section-card trend-card">
       <view class="section-heading">
-        <text>评分趋势</text><text class="section-hint">每日平均星级评分</text>
+        <view class="section-heading-title"><text class="section-leaf">❧</text><text>评分趋势</text></view><text class="section-hint">每日平均星级</text>
       </view>
       <view class="trend-chart">
         <view v-for="item in dailyScores" :key="item.date" class="trend-column">
@@ -337,42 +369,37 @@ function removeCurrent() {
       <view class="detail-sheet" @click.stop>
         <view class="sheet-handle" />
         <view class="sheet-header">
-          <view><text class="sheet-title">{{ detail.date }} · {{ mealOptions.find(item => item.value === detail?.mealType)?.label }}</text><text v-if="detailRecords.length > 1" class="sheet-subtitle">第 {{ detailIndex + 1 }} / {{ detailRecords.length }} 条</text></view><view class="close-button" @click="closeDetail">
-            ×
-          </view>
+          <view class="detail-header-copy"><text class="detail-eyebrow">SMARTDIET · 餐食记录</text><text class="sheet-title">{{ editing ? '编辑这一餐' : '饮食详情' }}</text><text class="sheet-subtitle">{{ detail.date.slice(0, 4) }}年{{ shortDateLabel(detail.date) }} · {{ mealOptions.find(item => item.value === detail?.mealType)?.label }}</text></view>
+          <view class="close-button" @click="closeDetail">×</view>
         </view>
 
-        <template v-if="!editing">
-          <scroll-view v-if="photos(detail).length" class="detail-photo-strip" scroll-x :show-scrollbar="false"><view class="detail-photo-row"><image v-for="(url, index) in photos(detail)" :key="`${url}-${index}`" class="detail-image" :src="absoluteAssetUrl(url)" mode="aspectFill" @click="previewPhoto(url, photos(detail))" /></view></scroll-view>
-          <view class="detail-score-row">
-            <view><text class="detail-score">{{ detail.rating || '--' }}</text><text class="detail-score-unit">星</text></view><text class="rating">{{ detail.rating ? '★'.repeat(detail.rating) : '未评分' }}</text>
-          </view>
-          <text class="detail-summary">{{ detail.name }}</text>
-          <text v-if="detail.description" class="detail-summary">{{ detail.description }}</text>
-          <text v-if="detail.price !== null" class="detail-price">消费 ¥{{ detail.price }}</text>
-          <view v-if="detail.positiveTags.length" class="tag-section">
-            <text class="tag-label">喜欢</text><view class="tag-row"><text v-for="tag in detail.positiveTags" :key="`positive-${tag}`" class="tag positive">{{ tag }}</text></view>
-          </view>
-          <view v-if="detail.negativeTags.length" class="tag-section">
-            <text class="tag-label">不喜欢</text><view class="tag-row"><text v-for="tag in detail.negativeTags" :key="`negative-${tag}`" class="tag warning">{{ tag }}</text></view>
-          </view>
-          <view v-if="detailRecords.length > 1" class="record-nav">
-            <button :disabled="detailIndex === 0" @click="detailIndex--">
-              上一条
-            </button><button :disabled="detailIndex === detailRecords.length - 1" @click="detailIndex++">
-              下一条
-            </button>
-          </view>
-          <view class="sheet-actions">
-            <button class="danger-button" @click="removeCurrent">
-              删除
-            </button><button class="edit-button" @click="startEdit">
-              编辑记录
-            </button>
-          </view>
-        </template>
+        <scroll-view class="detail-scroll" scroll-y :show-scrollbar="false">
+          <template v-if="!editing">
+            <view v-if="photos(detail).length" class="detail-hero">
+              <swiper :key="detail.id" class="detail-photo-swiper" :circular="photos(detail).length > 1" @change="detailPhotoIndex = $event.detail.current">
+                <swiper-item v-for="(url, index) in photos(detail)" :key="`${url}-${index}`"><image class="detail-hero-image" :src="absoluteAssetUrl(url)" mode="aspectFill" @click="previewPhoto(url, photos(detail))" /></swiper-item>
+              </swiper>
+              <text v-if="photos(detail).length > 1" class="detail-photo-counter">{{ detailPhotoIndex + 1 }} / {{ photos(detail).length }}</text>
+            </view>
+            <view v-else class="detail-photo-empty"><text class="detail-empty-icon">{{ mealOptions.find(item => item.value === detail?.mealType)?.icon }}</text><text>这一餐没有添加照片</text></view>
 
-        <template v-else-if="editRecord">
+            <view class="detail-name-row"><text class="detail-meal-name">{{ detail.name || '未命名餐食' }}</text><text class="detail-leaf">❧</text></view>
+            <view class="detail-meta-row">
+              <view class="detail-rating-chip"><text class="rating-stars">{{ detail.rating ? '★'.repeat(detail.rating) : '☆' }}</text><text>{{ detail.rating ? `${detail.rating}.0 星` : '未评分' }}</text></view>
+              <view v-if="detail.price !== null" class="detail-price-chip">¥{{ detail.price }}</view>
+            </view>
+
+            <view v-if="detail.description" class="detail-story"><text class="detail-card-title"><text class="detail-card-icon detail-story-icon">✎</text>补充描述</text><text class="detail-story-text">{{ detail.description }}</text></view>
+
+            <view v-if="detail.positiveTags.length || detail.negativeTags.length" class="detail-tag-grid">
+              <view v-if="detail.positiveTags.length" class="detail-tag-card"><text class="detail-card-title"><text class="detail-card-icon">♡</text>喜欢的地方</text><view class="tag-row"><text v-for="tag in detail.positiveTags" :key="`positive-${tag}`" class="tag positive">{{ tag }}</text></view></view>
+              <view v-if="detail.negativeTags.length" class="detail-tag-card"><text class="detail-card-title"><text class="detail-card-icon">✦</text>可以更好的地方</text><view class="tag-row"><text v-for="tag in detail.negativeTags" :key="`negative-${tag}`" class="tag warning">{{ tag }}</text></view></view>
+            </view>
+
+            <view v-if="detailRecords.length > 1" class="record-nav"><button :disabled="detailIndex === 0" @click="detailIndex--">‹ 上一条</button><text>{{ detailIndex + 1 }} / {{ detailRecords.length }}</text><button :disabled="detailIndex === detailRecords.length - 1" @click="detailIndex++">下一条 ›</button></view>
+          </template>
+
+          <template v-else-if="editRecord">
           <picker :range="mealLabels" :value="mealOptions.findIndex(item => item.value === editRecord?.mealType)" @change="onEditMealChange">
             <view class="edit-field">
               <text>餐次</text><text>{{ mealOptions.find(item => item.value === editRecord?.mealType)?.label }} ›</text>
@@ -391,16 +418,12 @@ function removeCurrent() {
           <view class="edit-field">
             <text>星级评分</text><view><text v-for="star in 5" :key="star" class="star" :class="{ active: star <= (editRecord.rating || 0) }" @click="editRecord.rating = star">★</text></view>
           </view>
-          <view class="sheet-actions">
-            <button class="danger-button" @click="editing = false">
-              取消
-            </button><button class="edit-button" :disabled="uploadingPhotos" :loading="saving" @click="saveEdit">
-              保存修改
-            </button>
-          </view>
-        </template>
+          </template>
+        </scroll-view>
+        <view class="sheet-actions"><template v-if="!editing"><button class="danger-button" @click="removeCurrent">删除记录</button><button class="edit-button" @click="startEdit">编辑记录</button></template><template v-else><button class="danger-button" @click="editing = false">取消</button><button class="edit-button" :disabled="uploadingPhotos" :loading="saving" @click="saveEdit">保存修改</button></template></view>
       </view>
     </view>
+    <DateCalendar :visible="showWeekCalendar" :selected-date="formatDate(focusDate)" mode="week" @close="showWeekCalendar = false" @select="selectWeekDate" />
   </view>
 </template>
 
@@ -954,4 +977,111 @@ function removeCurrent() {
 .todayText, .detail-score { color: #317949; }
 .detail-sheet { background: #fffefa; }
 .edit-button { background: #317949; }
+
+/* Report concept: compact weekly overview that fits a phone without horizontal scrolling. */
+.report-page { padding: 0 24rpx calc(160rpx + env(safe-area-inset-bottom)); }
+.report-intro { min-height: 160rpx; box-sizing: border-box; margin: 0 -24rpx; padding: calc(32rpx + env(safe-area-inset-top)) 38rpx 24rpx; border: 0; border-radius: 0; background: linear-gradient(130deg, #faf8f1 0%, #f5f7ed 100%); box-shadow: none; }
+.report-intro::after { display: none; }
+.report-headline { margin: 0; font-size: 47rpx; letter-spacing: 1rpx; }
+.report-description { margin-top: 7rpx; font-size: 20rpx; }
+.leaf-decoration { position: absolute; z-index: 0; width: 95rpx; height: 35rpx; border-radius: 95% 0 95% 0; background: rgba(113, 164, 109, 0.24); transform-origin: right center; }
+.leaf-one { top: 16rpx; right: 8rpx; transform: rotate(-26deg); }
+.leaf-two { top: 75rpx; right: 63rpx; transform: rotate(30deg); }
+.leaf-three { top: 99rpx; right: -6rpx; transform: rotate(-56deg); }
+.week-nav { height: 94rpx; margin-top: 5rpx; }
+.nav-button { width: 58rpx; height: 58rpx; border-radius: 50%; font-size: 39rpx; }
+.week-picker { min-width: 310rpx; height: 76rpx; box-sizing: border-box; padding: 0 16rpx; border: 1rpx solid #e7ecdf; border-radius: 22rpx; background: #fffefa; box-shadow: 0 6rpx 20rpx rgba(47, 73, 47, 0.06); display: flex; align-items: center; gap: 12rpx; text-align: left; }
+.week-calendar-icon { width: 43rpx; height: 43rpx; flex: none; border-radius: 13rpx; background: #eaf3e6; color: #57915e; font-size: 30rpx; line-height: 40rpx; text-align: center; }
+.week-picker-copy { flex: 1; min-width: 0; }
+.week-title { font-size: 20rpx; font-weight: 750; }
+.week-range { margin-top: 2rpx; color: #64866c; font-size: 21rpx; font-weight: 700; white-space: nowrap; }
+.week-chevron { color: #87a18a; font-size: 23rpx; }
+.summary-row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 14rpx; padding: 18rpx; border-radius: 30rpx; background: #fffefa; }
+.summary-main { min-height: 178rpx; box-sizing: border-box; padding: 23rpx 16rpx; border: 0; border-radius: 23rpx; background: linear-gradient(135deg, #f0f5e9, #fbf8ed); }
+.summary-eyebrow { color: #5b7963; font-size: 20rpx; }
+.summary-score { color: #185339; font-size: 63rpx; line-height: 1.15; }
+.summary-unit { color: #77927a; font-size: 24rpx; }
+.summary-stars { display: flex; gap: 4rpx; color: #d7ded2; font-size: 22rpx; }
+.summary-stars .filled { color: #6d9c5b; }
+.summary-side { display: flex; flex-direction: column; gap: 12rpx; }
+.summary-stat { flex: 1; display: flex; align-items: center; gap: 11rpx; padding: 12rpx; border-radius: 21rpx; background: #f7f9f3; text-align: left; }
+.stat-icon { width: 45rpx; height: 45rpx; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 26rpx; }
+.meals-icon { color: #397b4c; background: #e5f0e2; }
+.rated-icon { color: #e69a60; background: #fff0e3; }
+.summary-row .stat-label { font-size: 17rpx; white-space: nowrap; }
+.summary-row .stat-value { margin-top: 2rpx; font-size: 30rpx; line-height: 1; }
+.section-card { margin-top: 22rpx; }
+.section-heading { padding: 25rpx 21rpx 15rpx; font-size: 27rpx; }
+.section-heading-title { display: flex; align-items: center; gap: 8rpx; }
+.section-leaf { color: #78a873; font-size: 31rpx; line-height: 1; }
+.section-hint { font-size: 17rpx; }
+.calendar-grid { box-sizing: border-box; width: 100%; padding: 0 11rpx 18rpx; grid-template-columns: 78rpx repeat(7, minmax(0, 1fr)); gap: 3rpx; }
+.grid-header { height: 62rpx; border-radius: 9rpx; background: #f6f8f2; font-size: 17rpx; }
+.day-number { margin-top: 2rpx; font-size: 18rpx; }
+.meal-cell { height: 81rpx; box-sizing: border-box; border: 0; border-radius: 10rpx; font-size: 16rpx; }
+.meal-icon { margin-bottom: 0; font-size: 22rpx; }
+.record-cell { height: 81rpx; border: 0; border-radius: 10rpx; background: #f4f6f1; }
+.record-marquee-viewport { width: 100%; height: 100%; overflow: hidden; }
+.record-marquee-track { height: 100%; display: flex; animation: record-marquee linear infinite; will-change: transform; }
+.record-marquee-viewport:hover .record-marquee-track, .record-marquee-viewport:active .record-marquee-track { animation-play-state: paused; }
+.record-slide { position: relative; flex: none; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+@keyframes record-marquee { to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .record-marquee-track { animation: none; } }
+.cell-image { opacity: 1; }
+.cell-score { position: absolute; bottom: 3rpx; right: 3rpx; padding: 1rpx 4rpx; border-radius: 7rpx; background: rgba(255, 255, 255, 0.9); color: #1c6b3e; font-size: 15rpx; line-height: 1.2; }
+.cell-food { width: 90%; margin: 0; font-size: 15rpx; }
+.record-count { top: 2rpx; right: 2rpx; font-size: 13rpx; }
+.add-mark { font-size: 29rpx; }
+.calendar-empty { padding: 0 20rpx 20rpx; color: #8a9c8c; font-size: 18rpx; text-align: center; }
+.trend-chart { height: 223rpx; padding: 4rpx 19rpx 25rpx; gap: 10rpx; }
+.bar-track { width: 38rpx; height: 140rpx; border-radius: 11rpx 11rpx 4rpx 4rpx; }
+.bar-value { border-radius: 11rpx 11rpx 4rpx 4rpx; }
+.trend-score { color: #39654a; font-size: 17rpx; }
+
+/* Meal detail sheet, aligned with the record detail concept in design/. */
+.modal-overlay { background: rgba(22, 43, 30, 0.48); }
+.detail-sheet { display: flex; flex-direction: column; height: min(100%, 1120rpx); max-height: 100%; padding: 11rpx 28rpx calc(20rpx + env(safe-area-inset-bottom)); overflow: hidden; border-radius: 36rpx 36rpx 0 0; background: #fffefa; }
+.sheet-handle { flex: none; margin-bottom: 15rpx; background: #d7e3d7; }
+.sheet-header { flex: none; padding-bottom: 19rpx; }
+.detail-header-copy { min-width: 0; }
+.detail-eyebrow { display: block; color: #7da481; font-size: 17rpx; font-weight: 750; letter-spacing: 2rpx; }
+.sheet-title { margin-top: 5rpx; color: #193e2b; font-size: 35rpx; font-weight: 820; }
+.sheet-subtitle { margin-top: 5rpx; color: #728775; font-size: 20rpx; }
+.close-button { width: 52rpx; height: 52rpx; flex: none; border-radius: 50%; background: #f0f5ee; color: #68876e; }
+.detail-scroll { flex: 1; width: 100%; height: 0; min-height: 0; }
+.detail-hero { position: relative; height: 385rpx; overflow: hidden; border-radius: 28rpx; background: #eef2e8; }
+.detail-photo-swiper, .detail-hero-image { width: 100%; height: 100%; }
+.detail-photo-counter { position: absolute; right: 15rpx; bottom: 15rpx; padding: 6rpx 15rpx; border-radius: 999rpx; color: #fff; background: rgba(25, 49, 34, 0.66); font-size: 20rpx; font-weight: 700; }
+.detail-photo-empty { height: 230rpx; border-radius: 28rpx; background: radial-gradient(circle at 50% 35%, #f8f5e7, #e9f1e5); color: #8aa08a; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8rpx; font-size: 20rpx; }
+.detail-empty-icon { font-size: 58rpx; }
+.detail-name-row { display: flex; align-items: center; gap: 10rpx; margin-top: 24rpx; }
+.detail-meal-name { min-width: 0; flex: 1; color: #173e2b; font-size: 34rpx; font-weight: 820; line-height: 1.3; overflow-wrap: anywhere; }
+.detail-leaf { color: #a8c6a0; font-size: 35rpx; }
+.detail-meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12rpx; margin-top: 17rpx; }
+.detail-rating-chip, .detail-price-chip { min-height: 62rpx; box-sizing: border-box; padding: 0 19rpx; border-radius: 18rpx; display: flex; align-items: center; justify-content: center; gap: 9rpx; font-size: 23rpx; font-weight: 730; }
+.detail-rating-chip { color: #bc802b; background: #fff5e4; }
+.rating-stars { color: #ed9b22; font-size: 27rpx; letter-spacing: 1rpx; }
+.detail-price-chip { color: #245638; background: #e9f2e5; font-size: 28rpx; }
+.detail-story { margin-top: 26rpx; padding: 23rpx 25rpx; border-radius: 25rpx; background: linear-gradient(120deg, #f1f6e9, #f8f8ef); }
+.detail-card-title { color: #1e4630; font-size: 25rpx; font-weight: 780; display: flex; align-items: center; gap: 9rpx; }
+.detail-card-icon { color: #5e9463; font-size: 30rpx; line-height: 1; }
+.detail-story-icon { width: 38rpx; height: 38rpx; border-radius: 12rpx; color: #427e51; background: #dfeddf; display: inline-flex; align-items: center; justify-content: center; font-size: 27rpx; font-weight: 700; transform: rotate(-7deg); }
+.detail-story-text { display: block; margin-top: 14rpx; color: #5d7262; font-size: 22rpx; line-height: 1.58; overflow-wrap: anywhere; }
+.detail-tag-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14rpx; margin-top: 20rpx; }
+.detail-tag-card { min-width: 0; padding: 20rpx; border: 1rpx solid #edf0e6; border-radius: 22rpx; background: #fffefa; }
+.detail-tag-card:only-child { grid-column: 1 / -1; }
+.detail-tag-card .detail-card-title { font-size: 21rpx; }
+.detail-tag-card .tag-row { margin-top: 16rpx; }
+.detail-tag-card .tag { padding: 7rpx 14rpx; font-size: 19rpx; }
+.tag.positive { color: #34734a; background: #eaf3e5; }
+.tag.warning { color: #a17030; background: #fff0dc; }
+.record-nav { align-items: center; margin: 22rpx 0 12rpx; padding: 8rpx; border-radius: 20rpx; background: #f4f7f1; }
+.record-nav button { height: 58rpx; color: #42734e; background: #fffefa; font-size: 20rpx; }
+.record-nav button[disabled] { opacity: 0.4; }
+.record-nav > text { color: #78937c; font-size: 20rpx; white-space: nowrap; }
+.sheet-actions { flex: none; margin-top: 14rpx; padding-top: 14rpx; border-top: 1rpx solid #eef0e8; background: #fffefa; }
+.sheet-actions button { height: 78rpx; border-radius: 999rpx; font-size: 24rpx; font-weight: 750; }
+.sheet-actions .danger-button { border: 2rpx solid #35644a; color: #315b42; background: #fffefa; }
+.sheet-actions .edit-button { color: #fff; background: linear-gradient(110deg, #286144, #36764c); }
+.edit-field { background: #f5f8f1; }
 </style>
