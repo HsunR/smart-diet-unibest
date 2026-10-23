@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { SmartDietUser } from '@/api/types/smartdiet'
 import { absoluteAssetUrl, getRecordHistory, updateCurrentUser, uploadFoodImage } from '@/api/smartdiet'
+import SmartDietHeader from '@/components/SmartDietHeader.vue'
+import { usePageHeader } from '@/hooks/usePageHeader'
 import { useChatStore, useTokenStore, useUserStore } from '@/store'
 import { chooseImage, formatDate } from '@/utils/smartdiet'
 
@@ -13,6 +15,7 @@ definePage({
 })
 
 const tokenStore = useTokenStore()
+const { pageHeaderStyle } = usePageHeader()
 const userStore = useUserStore()
 const chatStore = useChatStore()
 const editing = ref(false)
@@ -108,8 +111,8 @@ function logout() {
 </script>
 
 <template>
-  <view class="profile-page">
-    <view class="profile-intro pt-safe"><text class="profile-title">我的</text><text class="profile-subtitle">把每一天，好好收藏。</text><view class="profile-leaf leaf-a" /><view class="profile-leaf leaf-b" /><view class="profile-leaf leaf-c" /></view>
+  <view class="profile-page" :style="pageHeaderStyle">
+    <SmartDietHeader class="page-header" title="我的" subtitle="把每一天，好好收藏。" />
     <view class="profile-hero">
       <view class="hero-orb" />
       <view class="avatar-wrap" @click="changeAvatar">
@@ -177,6 +180,7 @@ function logout() {
 </template>
 
 <style scoped lang="scss">
+.page-header { margin: 0 -24rpx; }
 .profile-page {
   min-height: 100vh;
   box-sizing: border-box;
@@ -480,10 +484,6 @@ function logout() {
   background: #fff;
 }
 .profile-page { background: #faf8f1; color: var(--sd-forest); }
-.profile-intro { padding: 12rpx 7rpx 22rpx; }
-.profile-kicker, .profile-title { display: block; }
-.profile-kicker { color: #69a071; font-size: 20rpx; font-weight: 700; letter-spacing: 1rpx; }
-.profile-title { margin-top: 9rpx; color: #173d2b; font-size: 35rpx; font-weight: 800; }
 .profile-hero { border: 1rpx solid #e6eddc; color: #214430; background: radial-gradient(circle at 90% 10%, #fffdf8 0%, #f1f3e5 55%, #e4eedf 100%); box-shadow: var(--sd-card-shadow); }
 .hero-orb { background: rgba(112, 165, 100, 0.11); }
 .avatar { border-color: #fffefa; background: #e4efe1; box-shadow: 0 8rpx 20rpx rgba(45, 80, 47, 0.09); }
@@ -507,13 +507,6 @@ function logout() {
 
 /* Profile concept: welcoming identity, thirty-day activity and editable body details. */
 .profile-page { padding: 0 24rpx calc(155rpx + env(safe-area-inset-bottom)); }
-.profile-intro { position: relative; overflow: hidden; min-height: 150rpx; box-sizing: border-box; margin: 0 -24rpx; padding: calc(31rpx + env(safe-area-inset-top)) 38rpx 19rpx; background: linear-gradient(130deg, #faf8f1, #f5f7ed); }
-.profile-title { position: relative; z-index: 1; margin: 0; color: #153d2b; font-size: 48rpx; letter-spacing: 1rpx; }
-.profile-subtitle { position: relative; z-index: 1; display: block; margin-top: 6rpx; color: #7b907d; font-size: 20rpx; }
-.profile-leaf { position: absolute; right: 10rpx; width: 97rpx; height: 36rpx; border-radius: 95% 0 95% 0; background: rgba(107, 160, 103, 0.25); transform-origin: right center; }
-.leaf-a { top: 18rpx; transform: rotate(-25deg); }
-.leaf-b { top: 76rpx; right: 67rpx; transform: rotate(27deg); }
-.leaf-c { top: 100rpx; right: -13rpx; transform: rotate(-58deg); }
 .profile-hero { min-height: 204rpx; margin-top: 10rpx; padding: 28rpx; border-radius: 30rpx; gap: 18rpx; background: radial-gradient(circle at 92% 4%, #f8faed 0%, #e9f1df 72%, #dbeacb 100%); }
 .hero-orb { top: -105rpx; right: -55rpx; width: 250rpx; height: 250rpx; background: rgba(255, 255, 255, 0.19); }
 .avatar { width: 124rpx; height: 124rpx; border: 6rpx solid #fffefa; border-radius: 50%; }

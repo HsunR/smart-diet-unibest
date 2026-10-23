@@ -2,7 +2,9 @@
 import type { MealType } from '@/api/types/smartdiet'
 import { absoluteAssetUrl, createRecord, getRecords, uploadFoodImage } from '@/api/smartdiet'
 import DateCalendar from '@/components/DateCalendar.vue'
+import SmartDietHeader from '@/components/SmartDietHeader.vue'
 import { useMealSuggestions } from '@/hooks/useMealSuggestions'
+import { usePageHeader } from '@/hooks/usePageHeader'
 import { useChatStore, useTokenStore } from '@/store'
 import { chooseImages, formatDate, getCurrentMealType, mealOptions, parseLocalDate, relativeDateLabel, shortDateLabel } from '@/utils/smartdiet'
 
@@ -12,6 +14,7 @@ definePage({
 })
 
 const recordStore = useChatStore()
+const { pageHeaderStyle } = usePageHeader()
 const tokenStore = useTokenStore()
 const dailyScore = ref(0)
 const todayRecordCount = ref(0)
@@ -338,24 +341,12 @@ onShow(() => {
 </script>
 
 <template>
-  <view class="record-page" :class="{ 'record-page-form': !!draft }">
-    <view class="record-header pt-safe" :class="{ 'form-mode': !!draft }">
-      <view v-if="draft" class="header-back" @click="closeRecord">
-        ‹
-      </view>
-      <view class="header-main">
-        <text class="header-title">饮食记录</text>
-        <view v-if="!draft" class="header-subtitle">
-          <text class="online-dot" />拍照识别，轻松记录每一餐
-        </view>
-      </view>
-      <view v-if="!draft" class="score-pill">
-        <text class="score-value">{{ dailyScore || '--' }}</text><text class="score-label">今日星级</text>
-      </view>
-      <view v-else class="header-leaves" aria-hidden="true">
-        ❦
-      </view>
-    </view>
+  <view class="record-page" :class="{ 'record-page-form': !!draft }" :style="pageHeaderStyle">
+    <SmartDietHeader title="饮食记录" :subtitle="draft ? undefined : '拍照识别，轻松记录每一餐'" fixed :back="!!draft" dot @back="closeRecord">
+      <template #action>
+        <view class="header-score"><text>今日星级</text><text class="header-score-value">{{ dailyScore || '--' }}</text></view>
+      </template>
+    </SmartDietHeader>
 
     <scroll-view class="record-scroll" scroll-y :show-scrollbar="false">
       <view class="record-content" :class="{ 'form-content': !!draft }">
@@ -632,16 +623,10 @@ onShow(() => {
   color: #4a7748;
 }
 
-.record-page { --header-height: 112rpx; --action-height: 126rpx; --tabbar-height: 100rpx; height: 100%; min-height: 0; background: #f7f8f3; color: #244532; }
-.record-header { box-sizing: border-box; position: fixed; z-index: 2; top: 0; right: 0; left: 0; height: calc(var(--header-height) + env(safe-area-inset-top)); padding: 0 30rpx 20rpx; background: rgba(255, 255, 255, 0.98); border-bottom: 1rpx solid #eef1e9; display: flex; align-items: flex-end; justify-content: space-between; }
-.header-title { display: block; color: #173c2b; font-size: 36rpx; font-weight: 750; letter-spacing: 1rpx; }
-.header-subtitle { margin-top: 5rpx; color: #889b8d; font-size: 21rpx; display: flex; align-items: center; gap: 9rpx; }
-.online-dot { width: 11rpx; height: 11rpx; border-radius: 50%; background: #42b977; box-shadow: 0 0 0 5rpx rgba(66, 185, 119, 0.13); }
-.score-pill { min-width: 104rpx; padding: 9rpx 17rpx; border: 1rpx solid #e5f2e7; border-radius: 23rpx; background: #f0f8ef; text-align: center; }
-.score-value, .score-label { display: block; }
-.score-value { color: #21864d; font-size: 29rpx; font-weight: 750; line-height: 1.1; }
-.score-label { margin-top: 4rpx; color: #73907b; font-size: 18rpx; }
-.record-scroll { position: fixed; top: calc(var(--header-height) + env(safe-area-inset-top)); right: 0; bottom: calc(var(--action-height) + var(--tabbar-height) + env(safe-area-inset-bottom)); left: 0; }
+.record-page { --sd-header-meta-height: 60rpx; --header-height: calc(var(--sd-status-bar-height, env(safe-area-inset-top)) + var(--sd-nav-height, 44px) + var(--sd-header-meta-height)); --action-height: 126rpx; --tabbar-height: 100rpx; height: 100%; min-height: 0; background: #f7f8f3; color: #244532; }
+.header-score { display: flex; align-items: center; gap: 9rpx; color: #7b907d; font-size: 19rpx; line-height: 28rpx; }
+.header-score-value { color: #2f7b4b; font-size: 24rpx; font-weight: 750; }
+.record-scroll { position: fixed; top: var(--header-height); right: 0; bottom: calc(var(--action-height) + var(--tabbar-height) + env(safe-area-inset-bottom)); left: 0; }
 .record-content { padding: 24rpx 25rpx 44rpx; }
 .empty-hero { position: relative; overflow: hidden; padding: 38rpx 38rpx 28rpx; border-radius: 35rpx; background: linear-gradient(145deg, #e8f5e6 0%, #f2f8e9 54%, #fff4e2 100%); border: 1rpx solid rgba(69, 127, 70, 0.08); }
 .empty-hero::before { content: ''; position: absolute; top: -105rpx; right: -115rpx; width: 350rpx; height: 350rpx; border: 1rpx solid rgba(255, 255, 255, 0.7); border-radius: 50%; }
@@ -714,10 +699,6 @@ onShow(() => {
 
 /* SmartDiet editorial theme shared with the concept preview. */
 .record-page { background: #faf8f1; color: var(--sd-forest); }
-.record-header { background: rgba(250, 248, 241, 0.98); border-bottom-color: #f0eee4; }
-.header-title { color: var(--sd-forest); }
-.score-pill { background: #fffdf8; border-color: #efeadf; box-shadow: 0 5rpx 16rpx rgba(61, 73, 45, 0.05); }
-.score-value { color: var(--sd-green); }
 .record-content { padding: 23rpx 25rpx 45rpx; }
 .empty-hero { padding: 34rpx 32rpx 28rpx; background: radial-gradient(circle at 65% 38%, #fffdf5 0%, #f6f5e8 48%, #e9f0dc 100%); border-color: #e8ecd9; box-shadow: var(--sd-card-shadow); }
 .empty-hero::before { top: -96rpx; right: -90rpx; width: 300rpx; height: 300rpx; border-color: rgba(75, 119, 59, 0.12); }
@@ -773,12 +754,7 @@ onShow(() => {
 .photo-help { display: block; margin-top: 11rpx; color: #9ba99b; font-size: 18rpx; }
 
 /* The entry form follows the warm botanical meal-journal preview. */
-.record-page-form { background: #faf8f1; }
-.record-header.form-mode { padding: 0 25rpx 13rpx; border-bottom: 0; background: #faf8f1; align-items: flex-end; justify-content: center; }
-.record-header.form-mode .header-main { align-self: flex-end; }
-.record-header.form-mode .header-title { font-size: 27rpx; font-weight: 800; letter-spacing: 0; }
-.header-back { position: absolute; bottom: 8rpx; left: 25rpx; width: 55rpx; height: 57rpx; color: #143b2c; font-size: 49rpx; line-height: 51rpx; text-align: center; }
-.header-leaves { position: absolute; right: 21rpx; bottom: 4rpx; width: 65rpx; color: #9ab793; font-size: 62rpx; line-height: 1; transform: rotate(-27deg); opacity: 0.7; }
+.record-page-form { --sd-header-meta-height: 0rpx; background: #faf8f1; }
 .form-content { padding: 0 11rpx 26rpx; }
 .form-layout { gap: 13rpx; }
 .form-hero { min-height: 166rpx; padding: 11rpx 7rpx 0; overflow: visible; border: 0; border-radius: 0; background: transparent; box-shadow: none; }

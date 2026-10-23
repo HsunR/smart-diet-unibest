@@ -2,6 +2,8 @@
 import type { FoodRecord, MealType } from '@/api/types/smartdiet'
 import { absoluteAssetUrl, deleteRecord, getRecordHistory, updateRecord, uploadFoodImage } from '@/api/smartdiet'
 import DateCalendar from '@/components/DateCalendar.vue'
+import SmartDietHeader from '@/components/SmartDietHeader.vue'
+import { usePageHeader } from '@/hooks/usePageHeader'
 import { useTokenStore } from '@/store'
 import { chooseImages, formatDate, mealOptions, parseLocalDate, shortDateLabel, startOfWeek } from '@/utils/smartdiet'
 
@@ -22,6 +24,7 @@ interface WeekDay {
 }
 
 const tokenStore = useTokenStore()
+const { pageHeaderStyle } = usePageHeader()
 const focusDate = ref(new Date())
 const showWeekCalendar = ref(false)
 const expanded = ref(false)
@@ -294,16 +297,12 @@ function removeCurrent() {
 </script>
 
 <template>
-  <view class="report-page" :class="{ 'report-page-expanded': expanded }">
+  <view class="report-page" :class="{ 'report-page-expanded': expanded }" :style="pageHeaderStyle">
     <view v-if="expanded" class="expanded-header">
       <view><text class="expanded-title">一周记录</text><text class="expanded-subtitle">横屏放大 · 点击餐食查看详情</text></view>
       <button class="collapse-button" aria-label="退出横屏放大" @click="toggleExpanded">收起 ×</button>
     </view>
-    <view v-if="!expanded" class="report-intro pt-safe">
-      <text class="report-headline">饮食报告</text>
-      <text class="report-description">每一餐，都在描绘你的这一周。</text>
-      <view class="leaf-decoration leaf-one" /><view class="leaf-decoration leaf-two" /><view class="leaf-decoration leaf-three" />
-    </view>
+    <SmartDietHeader v-if="!expanded" class="page-header" title="饮食报告" subtitle="每一餐，都在描绘你的这一周。" />
     <view class="week-nav">
       <view class="nav-button" @click="shiftWeek(-1)">
         ‹
@@ -442,6 +441,7 @@ function removeCurrent() {
 </template>
 
 <style scoped lang="scss">
+.page-header { margin: 0 -24rpx; }
 .report-page {
   --tabbar-height: 100rpx;
   min-height: 100vh;
@@ -960,13 +960,6 @@ function removeCurrent() {
   }
 }
 .report-page { background: #faf8f1; color: var(--sd-forest); }
-.report-intro { position: relative; overflow: hidden; padding: 30rpx 29rpx; border: 1rpx solid #e7ecd9; border-radius: 30rpx; background: radial-gradient(circle at 90% 10%, #fffdf8 0%, #f3f4e7 50%, #e7efdf 100%); box-shadow: var(--sd-card-shadow); }
-.report-intro::after { content: ''; position: absolute; width: 220rpx; height: 220rpx; top: -90rpx; right: -50rpx; border: 1rpx solid rgba(88, 136, 80, 0.19); border-radius: 50%; }
-.report-eyebrow, .report-headline, .report-description { position: relative; z-index: 1; display: block; }
-.report-eyebrow { color: #5e9668; font-size: 20rpx; font-weight: 700; letter-spacing: 1rpx; }
-.report-headline { margin-top: 11rpx; color: #173d2a; font-size: 38rpx; font-weight: 800; }
-.report-description { margin-top: 7rpx; color: #738477; font-size: 21rpx; }
-.report-ornament { position: absolute; right: 37rpx; bottom: 12rpx; color: #d3aa6d; font-size: 62rpx; }
 .week-nav { height: 112rpx; }
 .nav-button { border: 1rpx solid #e9ede3; border-radius: 19rpx; color: #457452; background: #fffefa; box-shadow: 0 5rpx 16rpx rgba(41, 73, 49, 0.04); }
 .week-title { color: #214631; font-size: 27rpx; }
@@ -994,14 +987,6 @@ function removeCurrent() {
 
 /* Report concept: compact weekly overview that fits a phone without horizontal scrolling. */
 .report-page { padding: 0 24rpx calc(160rpx + env(safe-area-inset-bottom)); }
-.report-intro { min-height: 160rpx; box-sizing: border-box; margin: 0 -24rpx; padding: calc(32rpx + env(safe-area-inset-top)) 38rpx 24rpx; border: 0; border-radius: 0; background: linear-gradient(130deg, #faf8f1 0%, #f5f7ed 100%); box-shadow: none; }
-.report-intro::after { display: none; }
-.report-headline { margin: 0; font-size: 47rpx; letter-spacing: 1rpx; }
-.report-description { margin-top: 7rpx; font-size: 20rpx; }
-.leaf-decoration { position: absolute; z-index: 0; width: 95rpx; height: 35rpx; border-radius: 95% 0 95% 0; background: rgba(113, 164, 109, 0.24); transform-origin: right center; }
-.leaf-one { top: 16rpx; right: 8rpx; transform: rotate(-26deg); }
-.leaf-two { top: 75rpx; right: 63rpx; transform: rotate(30deg); }
-.leaf-three { top: 99rpx; right: -6rpx; transform: rotate(-56deg); }
 .week-nav { height: 94rpx; margin-top: 5rpx; }
 .nav-button { width: 58rpx; height: 58rpx; border-radius: 50%; font-size: 39rpx; }
 .week-picker { min-width: 310rpx; height: 76rpx; box-sizing: border-box; padding: 0 16rpx; border: 1rpx solid #e7ecdf; border-radius: 22rpx; background: #fffefa; box-shadow: 0 6rpx 20rpx rgba(47, 73, 47, 0.06); display: flex; align-items: center; gap: 12rpx; text-align: left; }
