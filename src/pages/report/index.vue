@@ -298,12 +298,11 @@ function removeCurrent() {
 
 <template>
   <view class="report-page" :class="{ 'report-page-expanded': expanded }" :style="pageHeaderStyle">
-    <view v-if="expanded" class="expanded-header">
-      <view><text class="expanded-title">一周记录</text><text class="expanded-subtitle">横屏放大 · 点击餐食查看详情</text></view>
-      <button class="collapse-button" aria-label="退出横屏放大" @click="toggleExpanded">收起 ×</button>
-    </view>
+    <view class="report-stage">
     <SmartDietHeader v-if="!expanded" class="page-header" title="饮食报告" subtitle="每一餐，都在描绘你的这一周。" />
-    <view class="week-nav">
+    <view class="week-nav" :class="{ 'expanded-header': expanded }">
+      <text v-if="expanded" class="expanded-title">一周记录</text>
+      <view class="week-navigation">
       <view class="nav-button" @click="shiftWeek(-1)">
         ‹
       </view>
@@ -311,6 +310,8 @@ function removeCurrent() {
       <view class="nav-button" @click="shiftWeek(1)">
         ›
       </view>
+      </view>
+      <button v-if="expanded" class="collapse-button" aria-label="退出横屏放大" @click="toggleExpanded">收起 ×</button>
     </view>
 
     <view v-if="!expanded" class="summary-row">
@@ -324,7 +325,7 @@ function removeCurrent() {
     </view>
 
     <view class="section-card calendar-card">
-      <view class="section-heading">
+      <view v-if="!expanded" class="section-heading">
         <view class="section-heading-title"><text class="section-leaf">❧</text><text>一周记录</text></view>
         <view class="calendar-heading-actions"><text class="section-hint">轻触格子查看或添加</text><button v-if="!expanded" class="expand-button" aria-label="放大一周记录" @click="toggleExpanded"><text aria-hidden="true">⛶</text> 放大</button></view>
       </view>
@@ -437,6 +438,7 @@ function removeCurrent() {
       </view>
     </view>
     <DateCalendar :visible="showWeekCalendar" :selected-date="formatDate(focusDate)" mode="week" @close="showWeekCalendar = false" @select="selectWeekDate" />
+    </view>
   </view>
 </template>
 
@@ -1084,21 +1086,56 @@ function removeCurrent() {
 .sheet-actions .edit-button { color: #fff; background: linear-gradient(110deg, #286144, #36764c); }
 .edit-field { background: #f5f8f1; }
 
-/* 放大视图以屏幕长边作为宽度；设备转为横屏后恢复正常方向。 */
+/* 外层保持设备方向以遮住底栏；内容在避开状态栏、胶囊和手势区后旋转。 */
+.week-navigation { display: flex; width: 100%; align-items: center; justify-content: space-between; }
 .calendar-heading-actions { display: flex; align-items: center; gap: 12rpx; }
 .expand-button { display: flex; align-items: center; gap: 4rpx; margin: 0; padding: 0 13rpx; height: 45rpx; line-height: 45rpx; border-radius: 12rpx; background: #edf4e8; color: #396d48; font-size: 20rpx; font-weight: 600; }
 .expand-button::after, .collapse-button::after { border: 0; }
-.report-page.report-page-expanded { position: fixed; z-index: 2000; inset: 0; display: flex; flex-direction: column; width: 100vw; height: 100vh; height: 100dvh; min-height: 0; padding: 10px max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left)); overflow: hidden; background: #f7f8f0; }
-.expanded-header { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 12px; }
-.expanded-header > view { display: flex; align-items: baseline; gap: 12px; }
-.expanded-title { color: #204d34; font-size: 20px; font-weight: 800; }
-.expanded-subtitle { color: #7a8c7b; font-size: 11px; }
-.collapse-button { margin: 0; padding: 0 14px; height: 32px; line-height: 32px; border-radius: 16px; background: #e9f1e4; color: #386c45; font-size: 12px; }
-.report-page-expanded .week-nav { flex: none; height: 49px; margin: 0; }
-.report-page-expanded .nav-button { width: 30px; height: 30px; font-size: 28px; }
-.report-page-expanded .week-picker { min-width: 220px; height: 40px; border-radius: 13px; padding: 0 12px; gap: 8px; }
+.report-page.report-page-expanded {
+  --expanded-top: var(--sd-expanded-safe-top, env(safe-area-inset-top));
+  --expanded-right: var(--sd-safe-right, env(safe-area-inset-right));
+  --expanded-bottom: var(--sd-safe-bottom, env(safe-area-inset-bottom));
+  --expanded-left: var(--sd-safe-left, env(safe-area-inset-left));
+  position: fixed;
+  z-index: 2000;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--sd-window-width, 100vw);
+  height: var(--sd-window-height, 100vh);
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #f7f8f0;
+}
+.report-page-expanded .report-stage {
+  position: absolute;
+  top: var(--sd-expanded-center-y, calc(50% + (var(--expanded-top) - var(--expanded-bottom)) / 2));
+  right: auto;
+  bottom: auto;
+  left: var(--sd-expanded-center-x, calc(50% + (var(--expanded-left) - var(--expanded-right)) / 2));
+  width: var(--sd-expanded-width, calc(100vw - var(--expanded-left) - var(--expanded-right)));
+  height: var(--sd-expanded-height, calc(100vh - var(--expanded-top) - var(--expanded-bottom)));
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-height: 0;
+  padding: 4px 6px;
+  overflow: hidden;
+  // 日期选择和详情弹层的 fixed 定位也限制在此安全区域内。
+  transform: translate(-50%, -50%) rotate(var(--sd-expanded-rotation, 0deg));
+}
+.expanded-header { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 10px; }
+.expanded-header .week-navigation { flex: 1; width: auto; min-width: 0; max-width: 420px; margin: 0 auto; gap: 8px; }
+.expanded-title { flex: none; color: #204d34; font-size: 18px; font-weight: 800; white-space: nowrap; }
+.collapse-button { flex: none; margin: 0; padding: 0 14px; height: 40px; line-height: 40px; border-radius: 20px; background: #e9f1e4; color: #386c45; font-size: 13px; }
+.report-page-expanded .week-nav { flex: none; height: 44px; margin: 0 0 4px; }
+.report-page-expanded .nav-button { flex: none; width: 30px; height: 30px; font-size: 28px; }
+.report-page-expanded .week-picker { min-width: 0; height: 32px; border-radius: 11px; padding: 0 10px; gap: 6px; }
+.report-page-expanded .week-picker-copy { display: flex; align-items: center; gap: 8px; }
 .report-page-expanded .week-calendar-icon { width: 27px; height: 27px; border-radius: 8px; line-height: 26px; font-size: 20px; }
-.report-page-expanded .week-title { font-size: 11px; }
+.report-page-expanded .week-title { font-size: 12px; white-space: nowrap; }
 .report-page-expanded .week-range { margin-top: 0; font-size: 13px; }
 .report-page-expanded .week-chevron { font-size: 16px; }
 .report-page-expanded .calendar-card { display: flex; flex: 1; min-height: 0; flex-direction: column; margin: 0; border-radius: 16px; overflow: hidden; }
@@ -1106,7 +1143,7 @@ function removeCurrent() {
 .report-page-expanded .section-leaf { font-size: 19px; }
 .report-page-expanded .section-hint { font-size: 11px; }
 .report-page-expanded .calendar-scroll { flex: 1; min-height: 0; height: 0; }
-.report-page-expanded .calendar-grid { width: 100%; height: 100%; padding: 0 8px 8px; gap: 3px; grid-template-columns: 56px repeat(7, minmax(0, 1fr)); grid-template-rows: 40px repeat(4, minmax(0, 1fr)); }
+.report-page-expanded .calendar-grid { width: 100%; height: 100%; padding: 4px; gap: 3px; grid-template-columns: 56px repeat(7, minmax(0, 1fr)); grid-template-rows: 36px repeat(4, minmax(0, 1fr)); }
 .report-page-expanded .grid-header, .report-page-expanded .meal-cell, .report-page-expanded .record-cell { height: 100%; min-height: 0; border-radius: 7px; font-size: 11px; }
 .report-page-expanded .day-header { flex-direction: column; gap: 2px; }
 .report-page-expanded .day-number { margin: 0; font-size: 14px; }
@@ -1119,7 +1156,11 @@ function removeCurrent() {
 .report-page-expanded .modal-overlay { bottom: 0; align-items: center; justify-content: center; }
 .report-page-expanded .detail-sheet { max-width: 680px; height: 100%; border-radius: 18px; }
 @media (orientation: portrait) {
-  .report-page.report-page-expanded { inset: auto; top: 50%; left: 50%; width: 100vh; width: 100dvh; height: 100vw; min-height: 0; transform: translate(-50%, -50%) rotate(90deg); }
+  .report-page-expanded .report-stage {
+    width: var(--sd-expanded-width, calc(100vh - var(--expanded-top) - var(--expanded-bottom)));
+    height: var(--sd-expanded-height, calc(100vw - var(--expanded-left) - var(--expanded-right)));
+    transform: translate(-50%, -50%) rotate(var(--sd-expanded-rotation, 90deg));
+  }
 }
 
 </style>

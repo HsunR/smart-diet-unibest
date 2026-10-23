@@ -30,6 +30,8 @@ vi.mock('@/api/smartdiet', () => ({
   deleteRecord: vi.fn(),
 }))
 vi.mock('@/components/DateCalendar.vue', () => ({ default: { template: '<div />' } }))
+vi.mock('@/components/SmartDietHeader.vue', () => ({ default: { template: '<div />' } }))
+vi.mock('@/hooks/usePageHeader', () => ({ usePageHeader: () => ({ pageHeaderStyle: {} }) }))
 vi.mock('@/utils/smartdiet', async (importOriginal) => ({
   ...await importOriginal<typeof import('@/utils/smartdiet')>(),
   chooseImages: async () => ['local-a', 'local-b'],
@@ -198,7 +200,7 @@ it('expands and collapses the weekly calendar without changing the selected week
   const range = report.find('.week-range').text()
   await report.find('.expand-button').trigger('click')
   expect(report.classes()).toContain('report-page-expanded')
-  expect(report.find('.expanded-header').text()).toContain('横屏放大')
+  expect(report.find('.expanded-header').text()).toContain('一周记录')
   expect(report.find('.summary-row').exists()).toBe(false)
   expect(report.find('.trend-card').exists()).toBe(false)
   expect(report.findAll('.record-cell')).toHaveLength(28)
