@@ -12,7 +12,7 @@ export interface UiMessage {
 }
 
 export interface FoodDraft {
-  /** 图片仅作为饮食记录附件，不触发 AI 识别。 */
+  /** 餐食图片；用户点击识别后，整组图片一起生成名称和描述候选。 */
   imageUrls: string[]
   /** 兼容升级前保存在本地的草稿。 */
   localImageUrl?: string

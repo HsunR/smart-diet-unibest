@@ -12,6 +12,7 @@ import type {
 import { http } from '@/http/http'
 import { useTokenStore } from '@/store/token'
 import { getEnvBaseUrl } from '@/utils'
+import { createSseParser, createUtf8Decoder } from '@/utils/sse'
 
 export function loginWithWechat(code: string) {
   return http.post<LoginResult>('/api/v1/users/login', { code })
@@ -71,12 +72,12 @@ export function absoluteAssetUrl(path: string) {
   return `${getEnvBaseUrl().replace(/\/$/, '')}${path.startsWith('/') ? path : `/${path}`}`
 }
 
+/** 上传单张本地照片并返回存储地址；AI 识别由用户另行触发。 */
 export function uploadFoodImage(filePath: string) {
   return new Promise<{ url: string, filename: string }>((resolve, reject) => {
     const token = useTokenStore().updateNowTime().validToken
     uni.uploadFile({
-      // Unlike normal API calls, uploadFile does not consistently apply the
-      // request interceptor in every H5 runtime. Use the configured API host.
+      // 部分 H5 环境的上传接口不经过普通请求拦截器，需要显式设置 API 地址。
       url: `${getEnvBaseUrl().replace(/\/$/, '')}/api/v1/upload`,
       filePath,
       name: 'file',
@@ -105,39 +106,71 @@ export function uploadFoodImage(filePath: string) {
   })
 }
 
+/** 接收并处理一条已解析的流式事件。 */
 export type StreamEventHandler<T> = (event: T) => void
 
-/** 微信小程序使用分块请求；H5/其他平台会在请求完成后解析完整 SSE 文本。 */
+/** 请求启动后提供取消函数，供页面关闭或照片变化时中断连接。 */
+export interface StreamControl { cancel?: () => void }
+
+/** 餐食候选、错误提示和结束通知对应的事件类型。 */
+export type MealSuggestionEvent
+  = | { type: 'suggestion', data: { field: 'name' | 'description', value: string } }
+    | { type: 'error', data: { message: string } }
+    | { type: 'done', data: unknown }
+
+/** 将全部照片地址提交为一次识别请求，后端统一转换 Base64 并流式返回整餐建议。 */
+export function streamMealSuggestions(imageUrls: string[], onEvent: StreamEventHandler<MealSuggestionEvent>, control: StreamControl) {
+  return requestSse('/api/v1/records/recognize/stream', { imageUrls }, onEvent, control)
+}
+
+/** 发起可取消、带超时的 SSE 请求；H5 使用 Fetch 流，小程序使用分块请求，均增量解码 UTF-8。 */
 export function requestSse<T>(
   path: string,
   data: Record<string, unknown>,
   onEvent: StreamEventHandler<T>,
+  control: StreamControl = {},
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    let buffer = ''
-    let settled = false
+    let stopped = false
+    let abort = () => {}
+    const consume = createSseParser(onEvent)
+    const decode = createUtf8Decoder()
     const token = useTokenStore().updateNowTime().validToken
-
-    const consume = (text: string) => {
-      buffer += text.replace(/\r/g, '')
-      const blocks = buffer.split('\n\n')
-      buffer = blocks.pop() || ''
-      for (const block of blocks) {
-        const payload = block.split('\n').find(line => line.startsWith('data:'))?.slice(5).trim()
-        if (payload) {
-          try {
-            onEvent(JSON.parse(payload) as T)
-          }
-          catch (error) {
-            console.warn('忽略无法解析的 SSE 事件', error)
-          }
-        }
-      }
+    const timer = setTimeout(() => fail(new Error('识别超时，请重试或手动填写')), 90000)
+    /** 只结算一次请求并清理超时计时器。 */
+    function finish() {
+      if (stopped)
+        return
+      stopped = true
+      clearTimeout(timer)
+      resolve()
+    }
+    /** 终止网络请求并传递错误，忽略已结束请求的后续异常。 */
+    function fail(error: Error) {
+      if (stopped)
+        return
+      stopped = true
+      clearTimeout(timer)
+      abort()
+      reject(error)
+    }
+    // 主动取消按正常结束处理，避免关闭草稿时弹出网络错误。
+    control.cancel = () => {
+      finish()
+      abort()
+    }
+    /** 仅在请求有效时消费文本；final 用于刷新流末尾的剩余事件。 */
+    const receive = (text: string, final = false) => {
+      if (!stopped)
+        consume(text, final)
     }
 
     // #ifdef H5
+    const controller = new AbortController()
+    abort = () => controller.abort()
     fetch(`${getEnvBaseUrl().replace(/\/$/, '')}${path}`, {
       method: 'POST',
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -149,46 +182,68 @@ export function requestSse<T>(
       const reader = response.body?.getReader()
       if (!reader)
         throw new Error('当前环境不支持流式响应')
-      const decoder = new TextDecoder('utf-8')
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done)
-          break
-        consume(decoder.decode(value, { stream: true }))
+      try {
+        while (true) {
+          if (stopped)
+            break
+          const { done, value } = await reader.read()
+          if (done)
+            break
+          receive(decode(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer))
+        }
+        receive(decode(undefined, true), true)
+        finish()
       }
-      resolve()
-    }).catch(reject)
+      finally { reader.releaseLock() }
+    }).catch(fail)
     return
     // #endif
 
+    let receivedChunks = false
     const task = uni.request({
       url: `${getEnvBaseUrl().replace(/\/$/, '')}${path}`,
       method: 'POST',
       data,
       enableChunked: true,
       responseType: 'arraybuffer',
+      timeout: 90000,
       header: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       success(res) {
+        if (stopped)
+          return
         if (res.statusCode < 200 || res.statusCode >= 300) {
-          reject(new Error(`请求失败（${res.statusCode}）`))
+          fail(new Error(`请求失败（${res.statusCode}）`))
           return
         }
-        if (typeof res.data === 'string')
-          consume(res.data)
-        if (!settled) {
-          settled = true
-          resolve()
+        try {
+          if (!receivedChunks) {
+            if (typeof res.data === 'string')
+              receive(res.data)
+            else if (res.data instanceof ArrayBuffer)
+              receive(decode(res.data))
+          }
+          receive(decode(undefined, true), true)
+          finish()
         }
+        catch (error) { fail(error as Error) }
       },
-      fail: err => reject(new Error(err.errMsg || '网络异常')),
+      fail: err => fail(new Error(err.errMsg || '网络异常')),
     })
-
-    ;(task as any).onChunkReceived?.((response: { data: ArrayBuffer }) => {
-      const text = new TextDecoder('utf-8').decode(response.data)
-      consume(text)
+    abort = () => task.abort()
+    const chunkedTask = task as UniApp.RequestTask & {
+      onChunkReceived?: (callback: (response: { data: ArrayBuffer }) => void) => void
+    }
+    chunkedTask.onChunkReceived?.((response) => {
+      if (stopped)
+        return
+      receivedChunks = true
+      try {
+        receive(decode(response.data))
+      }
+      catch (error) { fail(error as Error) }
     })
   })
 }

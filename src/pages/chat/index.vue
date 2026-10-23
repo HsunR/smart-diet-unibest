@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import type { MealType } from '@/api/types/smartdiet'
 import { absoluteAssetUrl, createRecord, getRecords, uploadFoodImage } from '@/api/smartdiet'
 import DateCalendar from '@/components/DateCalendar.vue'
+import { useMealSuggestions } from '@/hooks/useMealSuggestions'
 import { useChatStore, useTokenStore } from '@/store'
 import { chooseImages, formatDate, getCurrentMealType, mealOptions, relativeDateLabel, shortDateLabel } from '@/utils/smartdiet'
 
@@ -29,7 +29,43 @@ const showDateCalendar = ref(false)
 const showDescription = ref(false)
 const showTagDetails = ref(true)
 const draft = computed(() => recordStore.draft)
+const { names: suggestedNames, descriptions: suggestedDescriptions, loading: recognizing, errors: recognitionErrors, hasStarted: recognitionStarted, start: startRecognition } = useMealSuggestions(draft, uploadingPhotos)
+const customTags = reactive({ positive: '', negative: '' })
+const visiblePositiveTags = computed(() => Array.from(new Set([...positiveTagOptions, ...(draft.value?.positiveTags || [])])))
+const visibleNegativeTags = computed(() => Array.from(new Set([...negativeTagOptions, ...(draft.value?.negativeTags || [])])))
 
+/** 校验并添加自定义感受标签，去重后清空输入框。 */
+function addCustomTag(kind: 'positive' | 'negative') {
+  if (!draft.value || draft.value.saving)
+    return
+  const tag = customTags[kind].trim()
+  if (!tag)
+    return
+  const tags = kind === 'positive' ? draft.value.positiveTags : draft.value.negativeTags
+  if (tag.length > 20 || (!tags.includes(tag) && tags.length >= 12)) {
+    uni.showToast({ title: '每类最多 12 个标签，每个最多 20 字', icon: 'none' })
+    return
+  }
+  if (!tags.includes(tag))
+    tags.push(tag)
+  customTags[kind] = ''
+}
+
+watch(() => draft.value, () => {
+  customTags.positive = ''
+  customTags.negative = ''
+})
+
+/** 将用户点击的 AI 候选填入对应字段，描述选中后展开编辑区。 */
+function selectSuggestion(field: 'name' | 'description', value: string) {
+  if (!draft.value || draft.value.saving)
+    return
+  draft.value[field] = value
+  if (field === 'description')
+    showDescription.value = true
+}
+
+/** 校验当前登录状态，未登录时跳转登录页。 */
 function ensureLogin() {
   if (!tokenStore.updateNowTime().hasLogin) {
     uni.reLaunch({ url: '/pages/login/index' })
@@ -38,6 +74,7 @@ function ensureLogin() {
   return true
 }
 
+/** 清理已保存草稿，并为旧版本地草稿补齐当前表单字段。 */
 function normalizeDraft() {
   const current = recordStore.draft
   if (!current)
@@ -55,6 +92,7 @@ function normalizeDraft() {
   current.price ??= null
 }
 
+/** 读取今日餐食记录，更新记录数量和平均星级。 */
 async function refreshTodayRecords() {
   if (!tokenStore.updateNowTime().hasLogin)
     return
@@ -71,6 +109,7 @@ async function refreshTodayRecords() {
   }
 }
 
+/** 初始化新的餐食草稿和表单展开状态。 */
 function startRecord() {
   if (!ensureLogin())
     return
@@ -92,15 +131,17 @@ function startRecord() {
   showDateCalendar.value = false
 }
 
+/** 更新就餐日期并关闭日期选择面板。 */
 function selectRecordDate(value: string) {
   if (draft.value)
     draft.value.date = value
   showDateCalendar.value = false
 }
 
+/** 关闭当前草稿；已有内容时先询问是否放弃。 */
 function closeRecord() {
   const current = recordStore.draft
-  if (!current)
+  if (!current || current.saving)
     return
   const hasContent = !!(current.name.trim() || current.description.trim() || current.imageUrls.length
     || current.positiveTags.length || current.negativeTags.length || current.price !== null || current.rating)
@@ -110,25 +151,38 @@ function closeRecord() {
       content: '已填写的内容将不会保存。',
       confirmText: '放弃',
       confirmColor: '#b85b48',
-      success: res => { if (res.confirm) recordStore.draft = null },
+      success: (res) => {
+        if (res.confirm)
+          recordStore.draft = null
+      },
     })
     return
   }
   recordStore.draft = null
 }
 
+/** 并发上传所选照片，按选图顺序插入草稿；上传完成后由用户手动开始识别。 */
 async function chooseRecordImages() {
   const current = draft.value
   if (!current || current.saving || uploadingPhotos.value || current.imageUrls.length >= maxPhotos)
     return
   try {
-    const paths = await chooseImages(maxPhotos - current.imageUrls.length)
     uploadingPhotos.value = true
-    const results = await Promise.allSettled(paths.map(path => uploadFoodImage(path)))
-    for (const result of results) {
-      if (result.status === 'fulfilled')
-        current.imageUrls.push(result.value.url)
-    }
+    const paths = await chooseImages(maxPhotos - current.imageUrls.length)
+    if (recordStore.draft !== current)
+      return
+    // 即使上传完成顺序不同，也按用户选图顺序排列照片。
+    const existingPhotoCount = current.imageUrls.length
+    const uploadedIndexes: number[] = []
+    const results = await Promise.allSettled(paths.map(async (path, index) => {
+      const result = await uploadFoodImage(path)
+      if (recordStore.draft === current) {
+        const offset = uploadedIndexes.filter(uploadedIndex => uploadedIndex < index).length
+        current.imageUrls.splice(existingPhotoCount + offset, 0, result.url)
+        uploadedIndexes.push(index)
+      }
+      return result
+    }))
     const failed = results.filter(result => result.status === 'rejected').length
     if (failed)
       uni.showToast({ title: `${failed} 张照片上传失败，请重试`, icon: 'none' })
@@ -143,12 +197,14 @@ async function chooseRecordImages() {
   }
 }
 
+/** 移除指定照片，由图片列表监听器取消旧识别并清空候选。 */
 function removeRecordImage(index: number) {
   if (!draft.value || uploadingPhotos.value || draft.value.saving)
     return
   draft.value.imageUrls.splice(index, 1)
 }
 
+/** 切换感受标签选中状态，并限制每类最多选择十二个。 */
 function toggleTag(kind: 'positive' | 'negative', tag: string) {
   const current = recordStore.draft
   if (!current)
@@ -157,10 +213,13 @@ function toggleTag(kind: 'positive' | 'negative', tag: string) {
   const index = tags.indexOf(tag)
   if (index >= 0)
     tags.splice(index, 1)
-  else
+  else if (tags.length < 12)
     tags.push(tag)
+  else
+    uni.showToast({ title: '每类最多选择 12 个标签', icon: 'none' })
 }
 
+/** 将价格输入转换为有限数值，空值或非法数值记为未填写。 */
 function onPriceInput(event: { detail: { value: string } }) {
   if (!recordStore.draft)
     return
@@ -169,6 +228,7 @@ function onPriceInput(event: { detail: { value: string } }) {
   recordStore.draft.price = value && Number.isFinite(price) ? price : null
 }
 
+/** 校验名称、收集待添加标签并保存餐食；无需等待 AI 回复结束。 */
 async function saveDraft() {
   const current = recordStore.draft
   if (!current || current.saving || uploadingPhotos.value)
@@ -178,6 +238,11 @@ async function saveDraft() {
     uni.showToast({ title: '请填写饮食名称', icon: 'none' })
     return
   }
+  // 保存时一并提交尚未点击“添加”的自定义标签。
+  addCustomTag('positive')
+  addCustomTag('negative')
+  if (customTags.positive.trim() || customTags.negative.trim())
+    return
   current.saving = true
   try {
     await createRecord({
@@ -205,6 +270,7 @@ async function saveDraft() {
   }
 }
 
+/** 根据是否存在草稿，执行开始记录或保存记录。 */
 function handlePrimaryAction() {
   if (!draft.value)
     startRecord()
@@ -212,6 +278,7 @@ function handlePrimaryAction() {
     saveDraft()
 }
 
+/** 将图片地址转换为可访问地址后打开照片预览。 */
 function preview(url: string, urls: string[]) {
   if (url)
     uni.previewImage({ urls: urls.map(absoluteAssetUrl), current: absoluteAssetUrl(url) })
@@ -229,36 +296,62 @@ onShow(() => {
 <template>
   <view class="record-page" :class="{ 'record-page-form': !!draft }">
     <view class="record-header pt-safe" :class="{ 'form-mode': !!draft }">
-      <view v-if="draft" class="header-back" @click="closeRecord">‹</view>
+      <view v-if="draft" class="header-back" @click="closeRecord">
+        ‹
+      </view>
       <view class="header-main">
         <text class="header-title">饮食记录</text>
-        <view v-if="!draft" class="header-subtitle"><text class="online-dot" />手动记录每一餐</view>
+        <view v-if="!draft" class="header-subtitle">
+          <text class="online-dot" />拍照识别，轻松记录每一餐
+        </view>
       </view>
-      <view v-if="!draft" class="score-pill"><text class="score-value">{{ dailyScore || '--' }}</text><text class="score-label">今日星级</text></view>
-      <view v-else class="header-leaves" aria-hidden="true">❦</view>
+      <view v-if="!draft" class="score-pill">
+        <text class="score-value">{{ dailyScore || '--' }}</text><text class="score-label">今日星级</text>
+      </view>
+      <view v-else class="header-leaves" aria-hidden="true">
+        ❦
+      </view>
     </view>
 
     <scroll-view class="record-scroll" scroll-y :show-scrollbar="false">
       <view class="record-content" :class="{ 'form-content': !!draft }">
         <template v-if="!draft">
           <view class="empty-hero">
-            <view class="hero-kicker"><text class="kicker-dot" /> 今日饮食 · 用心记录</view>
+            <view class="hero-kicker">
+              <text class="kicker-dot" /> 今日饮食 · 用心记录
+            </view>
             <text class="hero-title">好好吃饭，</text><text class="hero-title">也好好记录。</text>
             <text class="hero-copy">记下今天的味道，慢慢看见更好的自己。</text>
             <view class="hero-illustration">
               <view class="illustration-halo" />
               <image class="bowl-illustration" src="/static/images/meal-bowl-illustration.png" mode="aspectFit" />
             </view>
-            <view class="today-summary"><view><text class="summary-number">{{ todayRecordCount }}</text><text class="summary-unit">餐</text></view><text class="summary-label">今日已记录</text></view>
+            <view class="today-summary">
+              <view><text class="summary-number">{{ todayRecordCount }}</text><text class="summary-unit">餐</text></view><text class="summary-label">今日已记录</text>
+            </view>
           </view>
           <view class="guide-card">
-            <view class="guide-heading"><view><text class="guide-kicker">轻松开始</text><text class="guide-title">让每一餐都有迹可循</text></view><text class="guide-sparkle">✦</text></view>
+            <view class="guide-heading">
+              <view><text class="guide-kicker">轻松开始</text><text class="guide-title">让每一餐都有迹可循</text></view><text class="guide-sparkle">✦</text>
+            </view>
             <view class="guide-steps">
-              <view class="guide-step"><view class="step-icon">✎</view><text class="step-number">01</text><text class="step-label">写下餐食</text></view>
+              <view class="guide-step">
+                <view class="step-icon">
+                  ✎
+                </view><text class="step-number">01</text><text class="step-label">写下餐食</text>
+              </view>
               <view class="step-connector" />
-              <view class="guide-step"><view class="step-icon">♡</view><text class="step-number">02</text><text class="step-label">记下感受</text></view>
+              <view class="guide-step">
+                <view class="step-icon">
+                  ♡
+                </view><text class="step-number">02</text><text class="step-label">记下感受</text>
+              </view>
               <view class="step-connector" />
-              <view class="guide-step"><view class="step-icon">✓</view><text class="step-number">03</text><text class="step-label">完成记录</text></view>
+              <view class="guide-step">
+                <view class="step-icon">
+                  ✓
+                </view><text class="step-number">03</text><text class="step-label">完成记录</text>
+              </view>
             </view>
           </view>
         </template>
@@ -269,43 +362,232 @@ onShow(() => {
             <view class="form-title-underline" />
             <image class="form-art" src="/static/images/meal-form-avocado.png" mode="aspectFit" />
             <view class="record-fields">
-              <view class="date-trigger" @click="showDateCalendar = true"><text class="date-icon">▦</text><view class="date-copy"><text class="date-relative">{{ relativeDateLabel(draft.date) }}</text><text class="date-value">{{ shortDateLabel(draft.date) }}</text></view><text class="pill-arrow">⌄</text></view>
-              <view v-for="meal in mealOptions" :key="meal.value" class="meal-choice" :class="{ active: draft.mealType === meal.value }" @click="draft.mealType = meal.value"><text class="meal-choice-icon">{{ meal.icon }}</text><text class="meal-choice-label">{{ meal.label }}</text></view>
-            </view>
-          </view>
-
-          <view class="form-section">
-            <view class="section-heading"><view class="section-heading-main"><text class="section-index">🍴</text><text class="section-title">餐食信息</text></view></view>
-            <view class="form-field"><view class="photo-label-row"><text class="field-label">餐食照片 <text class="optional">可选</text></text><text class="photo-count">{{ draft.imageUrls.length }}/{{ maxPhotos }}</text></view>
-              <view class="photo-grid">
-                <view v-for="(url, index) in draft.imageUrls" :key="`${url}-${index}`" class="photo-tile"><image :src="absoluteAssetUrl(url)" mode="aspectFill" @click="preview(url, draft.imageUrls)" /><view class="photo-remove" @click.stop="removeRecordImage(index)">×</view></view>
-                <view v-if="draft.imageUrls.length < maxPhotos" class="photo-add" @click="chooseRecordImages"><text class="photo-add-icon">{{ uploadingPhotos ? '◌' : '＋' }}</text><text>{{ uploadingPhotos ? '上传中' : '添加照片' }}</text></view>
+              <view class="date-trigger" @click="showDateCalendar = true">
+                <text class="date-icon">▦</text><view class="date-copy">
+                  <text class="date-relative">{{ relativeDateLabel(draft.date) }}</text><text class="date-value">{{ shortDateLabel(draft.date) }}</text>
+                </view><text class="pill-arrow">⌄</text>
               </view>
-              <text class="photo-help">最多 6 张 · 图片不会进行 AI 识别</text>
+              <view v-for="meal in mealOptions" :key="meal.value" class="meal-choice" :class="{ active: draft.mealType === meal.value }" @click="draft.mealType = meal.value">
+                <text class="meal-choice-icon">{{ meal.icon }}</text><text class="meal-choice-label">{{ meal.label }}</text>
+              </view>
             </view>
-            <view class="form-field"><text class="field-label required">饮食名称</text><input v-model="draft.name" class="form-input" placeholder="例如：番茄鸡蛋面" :maxlength="120"></view>
-            <view class="form-field"><text class="field-label">饮食价格 <text class="optional">可选</text></text><view class="price-input-wrap"><text>¥</text><input :value="draft.price === null ? '' : String(draft.price)" type="digit" class="price-input" placeholder="0.00" @input="onPriceInput" /></view></view>
-            <view class="optional-toggle" @click="showDescription = !showDescription"><text>{{ showDescription || draft.description ? '饮食描述（可选）' : '＋ 添加饮食描述（可选）' }}</text><text>{{ showDescription ? '⌃' : '⌄' }}</text></view>
-            <view v-if="showDescription || draft.description" class="description-field"><textarea v-model="draft.description" class="form-textarea" auto-height placeholder="记录口味、食材或这一餐的故事…" :maxlength="1000" /></view>
           </view>
 
           <view class="form-section">
-            <view class="section-heading"><view class="section-heading-main"><text class="section-index">♥</text><text class="section-title">这一餐的感受</text></view></view>
-            <view class="mood-picker"><view v-for="(mood, index) in moodOptions" :key="mood.label" class="mood-choice" :class="[`mood-${index}`, { selected: draft.rating === 5 - index }]" @click="draft.rating = 5 - index"><text class="mood-icon">{{ mood.icon }}</text><text class="mood-label">{{ mood.label }}</text></view></view>
-            <view class="optional-toggle tag-toggle" @click="showTagDetails = !showTagDetails"><text>{{ showTagDetails ? '具体感受（可选）' : `＋ 添加具体感受（可选）${draft.positiveTags.length + draft.negativeTags.length ? ` · 已选 ${draft.positiveTags.length + draft.negativeTags.length}` : ''}` }}</text><text>{{ showTagDetails ? '⌃' : '⌄' }}</text></view>
-            <view v-if="showTagDetails" class="tag-details"><view class="form-field"><text class="field-label">喜欢的地方 <text class="label-emoji">♡</text></text><view class="tag-picker"><text v-for="tag in positiveTagOptions" :key="tag" class="selectable-tag positive" :class="{ selected: draft.positiveTags.includes(tag) }" @click="toggleTag('positive', tag)">{{ tag }}</text></view></view>
-              <view class="form-field"><text class="field-label">可以更好的地方 <text class="label-emoji">✳</text></text><view class="tag-picker"><text v-for="tag in negativeTagOptions" :key="tag" class="selectable-tag negative" :class="{ selected: draft.negativeTags.includes(tag) }" @click="toggleTag('negative', tag)">{{ tag }}</text></view></view></view>
+            <view class="section-heading">
+              <view class="section-heading-main">
+                <text class="section-index">🍴</text><text class="section-title">餐食信息</text>
+              </view>
+            </view>
+            <view class="form-field">
+              <view class="photo-label-row">
+                <text class="field-label">餐食照片 <text class="optional">可选</text></text><text class="photo-count">{{ draft.imageUrls.length }}/{{ maxPhotos }}</text>
+              </view>
+              <view class="photo-grid">
+                <view v-for="(url, index) in draft.imageUrls" :key="`${url}-${index}`" class="photo-tile">
+                  <image :src="absoluteAssetUrl(url)" mode="aspectFill" @click="preview(url, draft.imageUrls)" /><view class="photo-remove" @click.stop="removeRecordImage(index)">
+                    ×
+                  </view>
+                </view>
+                <view v-if="draft.imageUrls.length < maxPhotos" class="photo-add" @click="chooseRecordImages">
+                  <text class="photo-add-icon">{{ uploadingPhotos ? '◌' : '＋' }}</text><text>{{ uploadingPhotos ? '上传中' : '添加照片' }}</text>
+                </view>
+              </view>
+              <text class="photo-help">上传完成后点击开始识别，AI 将结合全部照片推荐填写内容</text>
+            </view>
+            <view v-if="draft.imageUrls.length" class="ai-status" role="status" aria-live="polite">
+              <text class="ai-status-title">✦ {{ recognizing ? 'AI 正在综合识别，建议会陆续出现…' : 'AI 餐食建议' }}</text>
+              <text class="ai-status-hint">{{ recognitionStarted ? '点击建议填入，可随时修改或直接保存。' : '将当前全部照片作为一餐一起分析，增删照片后需重新识别。' }}</text>
+              <button class="recognize-button" :disabled="uploadingPhotos || recognizing || draft.saving" :loading="recognizing" @click="startRecognition">
+                {{ uploadingPhotos ? '照片上传中…' : recognizing ? '正在识别…' : recognitionErrors.length ? '重试识别' : recognitionStarted ? '重新识别' : '开始识别' }}
+              </button>
+              <view v-if="recognitionErrors.length" class="ai-error">
+                <text>{{ recognitionErrors.join('；') }}</text>
+              </view>
+            </view>
+            <view class="form-field">
+              <text class="field-label required">饮食名称</text><input v-model="draft.name" class="form-input" placeholder="例如：番茄鸡蛋面" :maxlength="120">
+              <view v-if="suggestedNames.length" class="ai-suggestions">
+                <text class="suggestion-label">AI 名称建议 · 点击填入</text><view class="tag-picker">
+                  <button v-for="name in suggestedNames" :key="name" class="suggestion-chip" :class="{ active: draft.name === name }" :disabled="draft.saving" @click="selectSuggestion('name', name)">
+                    {{ name }}
+                  </button>
+                </view>
+              </view>
+            </view>
+            <view class="form-field">
+              <text class="field-label">饮食价格 <text class="optional">可选</text></text><view class="price-input-wrap">
+                <text>¥</text><input :value="draft.price === null ? '' : String(draft.price)" type="digit" class="price-input" placeholder="0.00" @input="onPriceInput">
+              </view>
+            </view>
+            <view class="optional-toggle" @click="showDescription = !showDescription">
+              <text>{{ showDescription || draft.description ? '饮食描述（可选）' : '＋ 添加饮食描述（可选）' }}</text><text>{{ showDescription ? '⌃' : '⌄' }}</text>
+            </view>
+            <view v-if="showDescription || draft.description || suggestedDescriptions.length" class="description-field">
+              <textarea v-model="draft.description" class="form-textarea" auto-height placeholder="记录口味、食材或这一餐的故事…" :maxlength="1000" />
+            </view>
+            <view v-if="suggestedDescriptions.length" class="ai-suggestions">
+              <text class="suggestion-label">AI 描述建议 · 点击填入</text><view class="description-options">
+                <button v-for="description in suggestedDescriptions" :key="description" class="suggestion-description" :class="{ active: draft.description === description }" :disabled="draft.saving" @click="selectSuggestion('description', description)">
+                  {{ description }}
+                </button>
+              </view>
+            </view>
+          </view>
+
+          <view class="form-section">
+            <view class="section-heading">
+              <view class="section-heading-main">
+                <text class="section-index">♥</text><text class="section-title">这一餐的感受</text>
+              </view>
+            </view>
+            <view class="mood-picker">
+              <view v-for="(mood, index) in moodOptions" :key="mood.label" class="mood-choice" :class="[`mood-${index}`, { selected: draft.rating === 5 - index }]" @click="draft.rating = 5 - index">
+                <text class="mood-icon">{{ mood.icon }}</text><text class="mood-label">{{ mood.label }}</text>
+              </view>
+            </view>
+            <view class="optional-toggle tag-toggle" @click="showTagDetails = !showTagDetails">
+              <text>{{ showTagDetails ? '具体感受（可选）' : `＋ 添加具体感受（可选）${draft.positiveTags.length + draft.negativeTags.length ? ` · 已选 ${draft.positiveTags.length + draft.negativeTags.length}` : ''}` }}</text><text>{{ showTagDetails ? '⌃' : '⌄' }}</text>
+            </view>
+            <view v-if="showTagDetails" class="tag-details">
+              <view class="form-field">
+                <text class="field-label">喜欢的地方 <text class="label-emoji">♡</text></text><view class="tag-picker">
+                  <text v-for="tag in visiblePositiveTags" :key="tag" class="selectable-tag positive" :class="{ selected: draft.positiveTags.includes(tag) }" @click="toggleTag('positive', tag)">{{ tag }}</text>
+                </view><view class="custom-tag-row">
+                  <input v-model="customTags.positive" class="custom-tag-input" placeholder="自定义喜欢的地方" :maxlength="20" confirm-type="done" :disabled="draft.saving" @confirm="addCustomTag('positive')"><button size="mini" :disabled="!customTags.positive.trim() || draft.saving" @click="addCustomTag('positive')">
+                    ＋ 添加
+                  </button>
+                </view>
+              </view>
+              <view class="form-field">
+                <text class="field-label">可以更好的地方 <text class="label-emoji">✳</text></text><view class="tag-picker">
+                  <text v-for="tag in visibleNegativeTags" :key="tag" class="selectable-tag negative" :class="{ selected: draft.negativeTags.includes(tag) }" @click="toggleTag('negative', tag)">{{ tag }}</text>
+                </view><view class="custom-tag-row">
+                  <input v-model="customTags.negative" class="custom-tag-input" placeholder="自定义可以更好的地方" :maxlength="20" confirm-type="done" :disabled="draft.saving" @confirm="addCustomTag('negative')"><button size="mini" :disabled="!customTags.negative.trim() || draft.saving" @click="addCustomTag('negative')">
+                    ＋ 添加
+                  </button>
+                </view>
+              </view>
+            </view>
           </view>
         </view>
       </view>
     </scroll-view>
 
-    <view class="action-bar pb-safe" :class="{ 'form-action': !!draft }"><button class="record-button" :disabled="!!draft && (!draft.name.trim() || draft.saving || uploadingPhotos)" :loading="draft?.saving" @click="handlePrimaryAction"><text>{{ !draft ? '开始记录这一餐' : '保存这一餐' }}</text><text v-if="!draft" class="action-arrow">→</text></button></view>
+    <view class="action-bar pb-safe" :class="{ 'form-action': !!draft }">
+      <button class="record-button" :disabled="!!draft && (!draft.name.trim() || draft.saving || uploadingPhotos)" :loading="draft?.saving" @click="handlePrimaryAction">
+        <text>{{ !draft ? '开始记录这一餐' : '保存这一餐' }}</text><text v-if="!draft" class="action-arrow">→</text>
+      </button>
+    </view>
     <DateCalendar :visible="showDateCalendar && !!draft" :selected-date="draft?.date || formatDate(new Date())" mode="day" @close="showDateCalendar = false" @select="selectRecordDate" />
   </view>
 </template>
 
 <style scoped lang="scss">
+.recognize-button { margin: 18rpx 0 0; padding: 0 26rpx; width: fit-content; border-radius: 18rpx; background: #4a8555; color: #fff; font-size: 24rpx; }
+.recognize-button[disabled] { background: #e2e8dd; color: #8b9a87; }
+.ai-status {
+  padding: 22rpx;
+  margin: 18rpx 0;
+  border-radius: 20rpx;
+  background: #eff6ed;
+}
+.ai-status-title,
+.ai-status-hint,
+.suggestion-label {
+  display: block;
+}
+.ai-status-title {
+  color: #39794c;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+.ai-status-hint,
+.suggestion-label {
+  color: #748779;
+  font-size: 22rpx;
+  margin-top: 10rpx;
+  line-height: 1.6;
+}
+.ai-error {
+  color: #a65c41;
+  font-size: 22rpx;
+  margin-top: 14rpx;
+  line-height: 1.6;
+}
+.ai-error button {
+  display: block;
+  margin: 12rpx 0 0;
+  width: fit-content;
+}
+.ai-suggestions {
+  margin-top: 12rpx;
+}
+.ai-suggestions .tag-picker {
+  margin-top: 10rpx;
+}
+.suggestion-chip,
+.suggestion-description {
+  margin: 0;
+  background: #f3f7f0;
+  border: 1rpx solid #dce8d7;
+  color: #4e6e51;
+  font-size: 23rpx;
+  font-weight: 400;
+  text-align: left;
+  line-height: 1.6;
+}
+.suggestion-chip {
+  padding: 10rpx 18rpx;
+  border-radius: 24rpx;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.suggestion-description {
+  padding: 16rpx 20rpx;
+  border-radius: 16rpx;
+  width: 100%;
+  overflow-wrap: anywhere;
+}
+.suggestion-chip::after,
+.suggestion-description::after {
+  border: 0;
+}
+.suggestion-chip.active,
+.suggestion-description.active {
+  border-color: #65a570;
+  background: #e0efdd;
+  color: #27683a;
+}
+.description-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  margin-top: 10rpx;
+}
+.custom-tag-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-top: 18rpx;
+}
+.custom-tag-input {
+  flex: 1;
+  min-width: 0;
+  height: 66rpx;
+  padding: 0 18rpx;
+  border: 1rpx solid #e3e9de;
+  border-radius: 14rpx;
+  background: #fbfcf8;
+  font-size: 23rpx;
+}
+.custom-tag-row button {
+  flex-shrink: 0;
+  margin: 0;
+  background: #edf4e8;
+  color: #4a7748;
+}
+
 .record-page { --header-height: 112rpx; --action-height: 126rpx; --tabbar-height: 100rpx; height: 100%; min-height: 0; background: #f7f8f3; color: #244532; }
 .record-header { box-sizing: border-box; position: fixed; z-index: 2; top: 0; right: 0; left: 0; height: calc(var(--header-height) + env(safe-area-inset-top)); padding: 0 30rpx 20rpx; background: rgba(255, 255, 255, 0.98); border-bottom: 1rpx solid #eef1e9; display: flex; align-items: flex-end; justify-content: space-between; }
 .header-title { display: block; color: #173c2b; font-size: 36rpx; font-weight: 750; letter-spacing: 1rpx; }
