@@ -24,6 +24,7 @@ interface WeekDay {
 const tokenStore = useTokenStore()
 const focusDate = ref(new Date())
 const showWeekCalendar = ref(false)
+const expanded = ref(false)
 const loading = ref(false)
 const records = ref<FoodRecord[]>([])
 const detailRecords = ref<FoodRecord[]>([])
@@ -171,6 +172,11 @@ function selectWeekDate(value: string) {
   loadWeek()
 }
 
+/** 切换横向全屏视图，沿用当前周和记录数据。 */
+function toggleExpanded() {
+  expanded.value = !expanded.value
+}
+
 function cellRecords(date: string, mealType: MealType) {
   return calendar.value[date]?.[mealType] || []
 }
@@ -180,17 +186,20 @@ function loopedCellRecords(date: string, mealType: MealType) {
   return [...items, ...items]
 }
 
+/** 空格子直接打开指定日期和餐次的新增表单；已有记录则展示详情。 */
 function openCell(date: string, mealType: MealType, recordIndex = 0) {
+  if (loading.value)
+    return
   const items = cellRecords(date, mealType)
   if (!items.length) {
-    uni.showModal({
-      title: '添加饮食记录',
-      content: `要为 ${date} 的${mealOptions.find(item => item.value === mealType)?.label}填写饮食记录吗？`,
-      success(res) {
-        if (res.confirm) {
-          uni.setStorageSync('pendingRecord', { date, mealType })
-          uni.switchTab({ url: '/pages/chat/index' })
-        }
+    // switchTab 不支持携带查询参数，由记录页 onShow 一次性消费该目标。
+    expanded.value = false
+    uni.setStorageSync('pendingRecord', { date, mealType })
+    uni.switchTab({
+      url: '/pages/chat/index',
+      fail() {
+        uni.removeStorageSync('pendingRecord')
+        uni.showToast({ title: '打开记录页失败，请重试', icon: 'none' })
       },
     })
     return
@@ -285,8 +294,12 @@ function removeCurrent() {
 </script>
 
 <template>
-  <view class="report-page">
-    <view class="report-intro pt-safe">
+  <view class="report-page" :class="{ 'report-page-expanded': expanded }">
+    <view v-if="expanded" class="expanded-header">
+      <view><text class="expanded-title">一周记录</text><text class="expanded-subtitle">横屏放大 · 点击餐食查看详情</text></view>
+      <button class="collapse-button" aria-label="退出横屏放大" @click="toggleExpanded">收起 ×</button>
+    </view>
+    <view v-if="!expanded" class="report-intro pt-safe">
       <text class="report-headline">饮食报告</text>
       <text class="report-description">每一餐，都在描绘你的这一周。</text>
       <view class="leaf-decoration leaf-one" /><view class="leaf-decoration leaf-two" /><view class="leaf-decoration leaf-three" />
@@ -301,7 +314,7 @@ function removeCurrent() {
       </view>
     </view>
 
-    <view class="summary-row">
+    <view v-if="!expanded" class="summary-row">
       <view class="summary-main">
         <text class="summary-eyebrow">本周平均星级</text><view><text class="summary-score">{{ averageScore || '--' }}</text><text class="summary-unit">/ 5</text></view><view class="summary-stars"><text v-for="star in 5" :key="star" :class="{ filled: star <= Math.round(averageScore) }">★</text></view>
       </view>
@@ -313,7 +326,8 @@ function removeCurrent() {
 
     <view class="section-card calendar-card">
       <view class="section-heading">
-        <view class="section-heading-title"><text class="section-leaf">❧</text><text>一周记录</text></view><text class="section-hint">轻触格子查看或添加</text>
+        <view class="section-heading-title"><text class="section-leaf">❧</text><text>一周记录</text></view>
+        <view class="calendar-heading-actions"><text class="section-hint">轻触格子查看或添加</text><button v-if="!expanded" class="expand-button" aria-label="放大一周记录" @click="toggleExpanded"><text aria-hidden="true">⛶</text> 放大</button></view>
       </view>
       <scroll-view scroll-x class="calendar-scroll" :show-scrollbar="false">
         <view class="calendar-grid">
@@ -350,7 +364,7 @@ function removeCurrent() {
       </view>
     </view>
 
-    <view class="section-card trend-card">
+    <view v-if="!expanded" class="section-card trend-card">
       <view class="section-heading">
         <view class="section-heading-title"><text class="section-leaf">❧</text><text>评分趋势</text></view><text class="section-hint">每日平均星级</text>
       </view>
@@ -1084,4 +1098,43 @@ function removeCurrent() {
 .sheet-actions .danger-button { border: 2rpx solid #35644a; color: #315b42; background: #fffefa; }
 .sheet-actions .edit-button { color: #fff; background: linear-gradient(110deg, #286144, #36764c); }
 .edit-field { background: #f5f8f1; }
+
+/* 放大视图以屏幕长边作为宽度；设备转为横屏后恢复正常方向。 */
+.calendar-heading-actions { display: flex; align-items: center; gap: 12rpx; }
+.expand-button { display: flex; align-items: center; gap: 4rpx; margin: 0; padding: 0 13rpx; height: 45rpx; line-height: 45rpx; border-radius: 12rpx; background: #edf4e8; color: #396d48; font-size: 20rpx; font-weight: 600; }
+.expand-button::after, .collapse-button::after { border: 0; }
+.report-page.report-page-expanded { position: fixed; z-index: 2000; inset: 0; display: flex; flex-direction: column; width: 100vw; height: 100vh; height: 100dvh; min-height: 0; padding: 10px max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left)); overflow: hidden; background: #f7f8f0; }
+.expanded-header { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 12px; }
+.expanded-header > view { display: flex; align-items: baseline; gap: 12px; }
+.expanded-title { color: #204d34; font-size: 20px; font-weight: 800; }
+.expanded-subtitle { color: #7a8c7b; font-size: 11px; }
+.collapse-button { margin: 0; padding: 0 14px; height: 32px; line-height: 32px; border-radius: 16px; background: #e9f1e4; color: #386c45; font-size: 12px; }
+.report-page-expanded .week-nav { flex: none; height: 49px; margin: 0; }
+.report-page-expanded .nav-button { width: 30px; height: 30px; font-size: 28px; }
+.report-page-expanded .week-picker { min-width: 220px; height: 40px; border-radius: 13px; padding: 0 12px; gap: 8px; }
+.report-page-expanded .week-calendar-icon { width: 27px; height: 27px; border-radius: 8px; line-height: 26px; font-size: 20px; }
+.report-page-expanded .week-title { font-size: 11px; }
+.report-page-expanded .week-range { margin-top: 0; font-size: 13px; }
+.report-page-expanded .week-chevron { font-size: 16px; }
+.report-page-expanded .calendar-card { display: flex; flex: 1; min-height: 0; flex-direction: column; margin: 0; border-radius: 16px; overflow: hidden; }
+.report-page-expanded .section-heading { flex: none; padding: 10px 12px 8px; font-size: 15px; }
+.report-page-expanded .section-leaf { font-size: 19px; }
+.report-page-expanded .section-hint { font-size: 11px; }
+.report-page-expanded .calendar-scroll { flex: 1; min-height: 0; height: 0; }
+.report-page-expanded .calendar-grid { width: 100%; height: 100%; padding: 0 8px 8px; gap: 3px; grid-template-columns: 56px repeat(7, minmax(0, 1fr)); grid-template-rows: 40px repeat(4, minmax(0, 1fr)); }
+.report-page-expanded .grid-header, .report-page-expanded .meal-cell, .report-page-expanded .record-cell { height: 100%; min-height: 0; border-radius: 7px; font-size: 11px; }
+.report-page-expanded .day-header { flex-direction: column; gap: 2px; }
+.report-page-expanded .day-number { margin: 0; font-size: 14px; }
+.report-page-expanded .meal-icon { font-size: 20px; }
+.report-page-expanded .add-mark { font-size: 30px; }
+.report-page-expanded .cell-score { right: 3px; bottom: 3px; padding: 1px 4px; border-radius: 6px; font-size: 12px; }
+.report-page-expanded .cell-food { font-size: 12px; }
+.report-page-expanded .record-count { top: 2px; right: 2px; padding: 1px 5px; border-radius: 7px; font-size: 10px; }
+.report-page-expanded .calendar-empty { flex: none; padding: 3px 12px 6px; font-size: 10px; }
+.report-page-expanded .modal-overlay { bottom: 0; align-items: center; justify-content: center; }
+.report-page-expanded .detail-sheet { max-width: 680px; height: 100%; border-radius: 18px; }
+@media (orientation: portrait) {
+  .report-page.report-page-expanded { inset: auto; top: 50%; left: 50%; width: 100vh; width: 100dvh; height: 100vw; min-height: 0; transform: translate(-50%, -50%) rotate(90deg); }
+}
+
 </style>

@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import type { MealType } from '@/api/types/smartdiet'
 import { absoluteAssetUrl, createRecord, getRecords, uploadFoodImage } from '@/api/smartdiet'
 import DateCalendar from '@/components/DateCalendar.vue'
 import { useMealSuggestions } from '@/hooks/useMealSuggestions'
 import { useChatStore, useTokenStore } from '@/store'
-import { chooseImages, formatDate, getCurrentMealType, mealOptions, relativeDateLabel, shortDateLabel } from '@/utils/smartdiet'
+import { chooseImages, formatDate, getCurrentMealType, mealOptions, parseLocalDate, relativeDateLabel, shortDateLabel } from '@/utils/smartdiet'
 
 definePage({
   type: 'home',
@@ -110,13 +111,13 @@ async function refreshTodayRecords() {
 }
 
 /** 初始化新的餐食草稿和表单展开状态。 */
-function startRecord() {
+function startRecord(target?: { date: string, mealType: MealType }) {
   if (!ensureLogin())
     return
   recordStore.draft = {
     imageUrls: [],
-    date: formatDate(new Date()),
-    mealType: getCurrentMealType(),
+    date: target?.date || formatDate(new Date()),
+    mealType: target?.mealType || getCurrentMealType(),
     name: '',
     description: '',
     positiveTags: [],
@@ -131,6 +132,50 @@ function startRecord() {
   showDateCalendar.value = false
 }
 
+/** 判断草稿中是否有需要在切换日期前保留的用户输入。 */
+function hasDraftContent() {
+  const current = recordStore.draft
+  return !!current && !!(current.name.trim() || current.description.trim() || current.imageUrls.length
+    || current.positiveTags.length || current.negativeTags.length || current.price !== null || current.rating
+    || customTags.positive.trim() || customTags.negative.trim())
+}
+
+/** 消费报告格子的一次性跳转参数；缓存页面每次显示时都需要检查。 */
+function openPendingRecord() {
+  const target = uni.getStorageSync('pendingRecord')
+  if (!target)
+    return
+  uni.removeStorageSync('pendingRecord')
+  if (typeof target.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(target.date)
+    || formatDate(parseLocalDate(target.date)) !== target.date
+    || !mealOptions.some(meal => meal.value === target.mealType)) {
+    uni.showToast({ title: '记录日期或餐次无效，请重新选择', icon: 'none' })
+    return
+  }
+  const current = recordStore.draft
+  if (current?.saving || uploadingPhotos.value) {
+    uni.showToast({ title: '请等待当前上传或保存完成后再选择', icon: 'none' })
+    return
+  }
+  // 同一日期、餐次继续编辑原草稿，不清空已填写的内容。
+  if (current?.date === target.date && current.mealType === target.mealType)
+    return
+  if (hasDraftContent()) {
+    uni.showModal({
+      title: '已有未保存的记录',
+      content: `是否放弃当前草稿，改为记录 ${target.date} 的${mealOptions.find(meal => meal.value === target.mealType)?.label}？`,
+      confirmText: '新建记录',
+      cancelText: '保留草稿',
+      success: (res) => {
+        if (res.confirm && recordStore.draft === current && !current?.saving && !uploadingPhotos.value)
+          startRecord(target)
+      },
+    })
+    return
+  }
+  startRecord(target)
+}
+
 /** 更新就餐日期并关闭日期选择面板。 */
 function selectRecordDate(value: string) {
   if (draft.value)
@@ -143,9 +188,7 @@ function closeRecord() {
   const current = recordStore.draft
   if (!current || current.saving)
     return
-  const hasContent = !!(current.name.trim() || current.description.trim() || current.imageUrls.length
-    || current.positiveTags.length || current.negativeTags.length || current.price !== null || current.rating)
-  if (hasContent && !current.saved) {
+  if (hasDraftContent() && !current.saved) {
     uni.showModal({
       title: '放弃当前记录？',
       content: '已填写的内容将不会保存。',
@@ -289,6 +332,7 @@ onShow(() => {
   if (!ensureLogin())
     return
   normalizeDraft()
+  openPendingRecord()
   refreshTodayRecords()
 })
 </script>
