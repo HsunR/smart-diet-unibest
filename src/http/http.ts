@@ -4,7 +4,8 @@ import { nextTick } from 'vue'
 import { useTokenStore } from '@/store/token'
 import { isDoubleTokenMode } from '@/utils'
 import { toLoginPage } from '@/utils/toLoginPage'
-import { createHttpError, getResponseMessage, HttpErrorType, isSuccessResultCode, ResultEnum, ShowMessage } from './tools/enum'
+import { createHttpError, getResponseMessage, HttpErrorType, isSuccessResultCode, ResultEnum } from './tools/enum'
+import { getRequestErrorMessage } from './tools/requestError'
 
 // 刷新 token 状态管理
 let refreshing = false // 防止重复刷新 token 标识
@@ -142,7 +143,7 @@ export function http<T>(options: CustomRequestOptions) {
           type: HttpErrorType.Http,
           code,
           statusCode: res.statusCode,
-          message: getResponseMessage(responseData, ShowMessage(res.statusCode)),
+          message: getRequestErrorMessage(res.statusCode, responseData, res.header),
           data: responseData?.data,
           raw: res,
         })

@@ -10,6 +10,7 @@ export enum ResultEnum {
   NotFound = 404, // 未找到（原为notFound）
   MethodNotAllowed = 405, // 方法不允许（原为methodNotAllowed）
   RequestTimeout = 408, // 请求超时（原为requestTimeout）
+  TooManyRequests = 429, // 请求过于频繁
   InternalServerError = 500, // 服务器错误（原为internalServerError）
   NotImplemented = 501, // 未实现（原为notImplemented）
   BadGateway = 502, // 网关错误（原为badGateway）
@@ -47,6 +48,8 @@ export function createHttpError<T>(params: HttpError<T>): HttpError<T> {
  * @returns {string} 错误信息
  */
 export function ShowMessage(status: number | string): string {
+  if (Number(status) === 429)
+    return '操作过于频繁，请稍后重试'
   let message: string
   switch (status) {
     case 400:

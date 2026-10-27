@@ -9,6 +9,7 @@ import type {
   WeeklyReport,
 } from './types/smartdiet'
 import { http } from '@/http/http'
+import { getRequestErrorMessage } from '@/http/tools/requestError'
 import { useTokenStore } from '@/store/token'
 import { getEnvBaseUrl } from '@/utils'
 import { createSseParser, createUtf8Decoder } from '@/utils/sse'
@@ -99,11 +100,11 @@ export function uploadFoodImage(filePath: string) {
           body = JSON.parse(res.data)
         }
         catch {
-          reject(new Error('图片上传响应格式错误'))
+          reject(new Error(res.statusCode >= 400 ? getRequestErrorMessage(res.statusCode) : '图片上传响应格式错误'))
           return
         }
         if (res.statusCode < 200 || res.statusCode >= 300) {
-          reject(new Error(body.message || '图片上传失败'))
+          reject(new Error(getRequestErrorMessage(res.statusCode, body)))
           return
         }
         if (body.code !== 0 || !body.data) {
@@ -189,7 +190,8 @@ export function requestSse<T>(
       body: JSON.stringify(data),
     }).then(async (response) => {
       if (!response.ok) {
-        throw new Error(`请求失败（${response.status}）`)
+        const body = await response.json().catch(() => undefined)
+        throw new Error(getRequestErrorMessage(response.status, body, response.headers))
       }
       const reader = response.body?.getReader()
       if (!reader)
@@ -212,6 +214,9 @@ export function requestSse<T>(
     // #endif
 
     let receivedChunks = false
+    let responseText = ''
+    let responseStatus = 0
+    let responseHeaders: Record<string, unknown> = {}
     const task = uni.request({
       url: `${getEnvBaseUrl().replace(/\/$/, '')}${path}`,
       method: 'POST',
@@ -227,7 +232,8 @@ export function requestSse<T>(
         if (stopped)
           return
         if (res.statusCode < 200 || res.statusCode >= 300) {
-          fail(new Error(`请求失败（${res.statusCode}）`))
+          const body = res.data instanceof ArrayBuffer ? createUtf8Decoder()(res.data) : res.data
+          fail(new Error(getRequestErrorMessage(res.statusCode, receivedChunks ? responseText : body, { ...responseHeaders, ...res.header })))
           return
         }
         try {
@@ -247,13 +253,23 @@ export function requestSse<T>(
     abort = () => task.abort()
     const chunkedTask = task as UniApp.RequestTask & {
       onChunkReceived?: (callback: (response: { data: ArrayBuffer }) => void) => void
+      onHeadersReceived?: (callback: (response: { statusCode?: number, header: Record<string, unknown> }) => void) => void
     }
+    chunkedTask.onHeadersReceived?.((response) => {
+      responseStatus = response.statusCode || 0
+      responseHeaders = response.header
+    })
     chunkedTask.onChunkReceived?.((response) => {
       if (stopped)
         return
       receivedChunks = true
       try {
-        receive(decode(response.data))
+        const text = decode(response.data)
+        // 小程序的分块响应可能不再提供完整 res.data，保留有限的错误正文。
+        if (responseText.length < 16384)
+          responseText += text.slice(0, 16384 - responseText.length)
+        if (responseStatus < 400)
+          receive(text)
       }
       catch (error) { fail(error as Error) }
     })
