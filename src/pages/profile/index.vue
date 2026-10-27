@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import type { SmartDietUser } from '@/api/types/smartdiet'
 import { absoluteAssetUrl, getRecordHistory, updateCurrentUser, uploadFoodImage } from '@/api/smartdiet'
+import PrivateImage from '@/components/PrivateImage.vue'
 import SmartDietHeader from '@/components/SmartDietHeader.vue'
 import { usePageHeader } from '@/hooks/usePageHeader'
-import { useChatStore, useTokenStore, useUserStore } from '@/store'
+import { useRecordStore, useTokenStore, useUserStore } from '@/store'
 import { chooseImage, formatDate } from '@/utils/smartdiet'
 
 definePage({
@@ -17,7 +18,7 @@ definePage({
 const tokenStore = useTokenStore()
 const { pageHeaderStyle } = usePageHeader()
 const userStore = useUserStore()
-const chatStore = useChatStore()
+const recordStore = useRecordStore()
 const editing = ref(false)
 const saving = ref(false)
 const editForm = ref<SmartDietUser>({ ...userStore.userInfo })
@@ -103,7 +104,7 @@ function logout() {
       tokenStore.setTokenInfo({ token: '', expiresIn: 0 })
       uni.removeStorageSync('accessTokenExpireTime')
       userStore.clearUserInfo()
-      chatStore.clear()
+      recordStore.clear()
       uni.reLaunch({ url: '/pages/login/index' })
     },
   })
@@ -116,7 +117,7 @@ function logout() {
     <view class="profile-hero">
       <view class="hero-orb" />
       <view class="avatar-wrap" @click="changeAvatar">
-        <image class="avatar" :src="absoluteAssetUrl((editing ? editForm.avatar : userStore.userInfo.avatar) || '/static/images/default-avatar.png')" mode="aspectFill" />
+        <PrivateImage class="avatar" :src="absoluteAssetUrl((editing ? editForm.avatar : userStore.userInfo.avatar) || '/static/images/default-avatar.png')" mode="aspectFill" />
         <view v-if="editing" class="avatar-edit">
           📷
         </view>

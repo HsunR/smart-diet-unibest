@@ -8,6 +8,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     DateCalendar: typeof import('./../components/DateCalendar.vue')['default']
+    PrivateImage: typeof import('./../components/PrivateImage.vue')['default']
     SmartDietHeader: typeof import('./../components/SmartDietHeader.vue')['default']
   }
 }

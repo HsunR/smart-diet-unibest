@@ -28,7 +28,7 @@ async function next() {
     userStore.setUserInfo(user)
     uni.setStorageSync('hasCompletedOnboarding', true)
     uni.showToast({ title: '资料已保存', icon: 'success' })
-    setTimeout(() => uni.switchTab({ url: '/pages/chat/index' }), 350)
+    setTimeout(() => uni.switchTab({ url: '/pages/record/index' }), 350)
   }
   catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : '保存失败', icon: 'none' })

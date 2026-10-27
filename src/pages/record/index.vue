@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import type { MealType } from '@/api/types/smartdiet'
-import { absoluteAssetUrl, createRecord, getRecords, uploadFoodImage } from '@/api/smartdiet'
+import { absoluteAssetUrl, createRecord, getRecords, previewFoodImages, uploadFoodImage } from '@/api/smartdiet'
 import DateCalendar from '@/components/DateCalendar.vue'
+import PrivateImage from '@/components/PrivateImage.vue'
 import SmartDietHeader from '@/components/SmartDietHeader.vue'
 import { useMealSuggestions } from '@/hooks/useMealSuggestions'
 import { usePageHeader } from '@/hooks/usePageHeader'
-import { useChatStore, useTokenStore } from '@/store'
+import { useRecordStore, useTokenStore } from '@/store'
 import { chooseImages, formatDate, getCurrentMealType, mealOptions, parseLocalDate, relativeDateLabel, shortDateLabel } from '@/utils/smartdiet'
 
 definePage({
@@ -13,7 +14,7 @@ definePage({
   style: { navigationStyle: 'custom', enablePullDownRefresh: false },
 })
 
-const recordStore = useChatStore()
+const recordStore = useRecordStore()
 const { pageHeaderStyle } = usePageHeader()
 const tokenStore = useTokenStore()
 const dailyScore = ref(0)
@@ -78,7 +79,7 @@ function ensureLogin() {
   return true
 }
 
-/** 清理已保存草稿，并为旧版本地草稿补齐当前表单字段。 */
+/** 清理已保存的草稿。 */
 function normalizeDraft() {
   const current = recordStore.draft
   if (!current)
@@ -87,13 +88,7 @@ function normalizeDraft() {
     recordStore.draft = null
     return
   }
-  if (!Array.isArray(current.imageUrls))
-    current.imageUrls = current.imageUrl ? [current.imageUrl] : []
-  current.name ||= ''
-  current.description ||= ''
-  current.positiveTags ||= []
-  current.negativeTags ||= []
-  current.price ??= null
+
 }
 
 /** 读取今日餐食记录，更新记录数量和平均星级。 */
@@ -299,7 +294,6 @@ async function saveDraft() {
       positiveTags: current.positiveTags,
       negativeTags: current.negativeTags,
       price: current.price,
-      imageUrl: current.imageUrls[0] || '',
       imageUrls: current.imageUrls,
       rating: current.rating,
     })
@@ -327,7 +321,7 @@ function handlePrimaryAction() {
 /** 将图片地址转换为可访问地址后打开照片预览。 */
 function preview(url: string, urls: string[]) {
   if (url)
-    uni.previewImage({ urls: urls.map(absoluteAssetUrl), current: absoluteAssetUrl(url) })
+    previewFoodImages(url, urls)
 }
 
 onLoad(normalizeDraft)
@@ -420,7 +414,7 @@ onShow(() => {
               </view>
               <view class="photo-grid">
                 <view v-for="(url, index) in draft.imageUrls" :key="`${url}-${index}`" class="photo-tile">
-                  <image :src="absoluteAssetUrl(url)" mode="aspectFill" @click="preview(url, draft.imageUrls)" /><view class="photo-remove" @click.stop="removeRecordImage(index)">
+                  <PrivateImage :src="absoluteAssetUrl(url)" mode="aspectFill" @click="preview(url, draft.imageUrls)" /><view class="photo-remove" @click.stop="removeRecordImage(index)">
                     ×
                   </view>
                 </view>

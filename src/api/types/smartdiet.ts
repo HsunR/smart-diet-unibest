@@ -2,7 +2,7 @@ export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'other'
 
 export interface SmartDietUser {
   id: string
-  openid: string
+  openid: string | null
   nickname: string
   avatar: string
   gender: number
@@ -56,7 +56,6 @@ export interface FoodRecordInput {
   positiveTags: string[]
   negativeTags: string[]
   price: number | null
-  imageUrl: string
   imageUrls: string[]
   rating: number
 }
@@ -71,14 +70,6 @@ export interface RecognitionResult {
   foods: FoodItem[]
   mealOverview: MealOverview
   dietaryAdvice: string
-}
-
-export interface ChatMessageResult {
-  id: string
-  conversationId: string
-  role: 'user' | 'assistant'
-  content: string
-  createdAt: string
 }
 
 export interface WeeklyReport {

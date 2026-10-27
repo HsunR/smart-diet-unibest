@@ -22,7 +22,7 @@ async function completeLogin(result: LoginResult) {
   if (result.isNew)
     uni.redirectTo({ url: '/pages/onboarding/index' })
   else
-    uni.switchTab({ url: '/pages/chat/index' })
+    uni.switchTab({ url: '/pages/record/index' })
 }
 
 async function handleWebLogin() {

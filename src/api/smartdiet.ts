@@ -1,5 +1,4 @@
 import type {
-  ChatMessageResult,
   FoodRecord,
   FoodRecordInput,
   LoginResult,
@@ -62,14 +61,26 @@ export function getWeeklyReport() {
   return http.get<WeeklyReport>('/api/v1/records/report/weekly')
 }
 
-export function sendChatMessage(content: string, conversationId?: string) {
-  return http.post<ChatMessageResult>('/api/v1/chat/messages', { content, conversationId })
-}
-
 export function absoluteAssetUrl(path: string) {
   if (!path || path.startsWith('http') || path.startsWith('blob:') || path.startsWith('data:') || path.startsWith('/static/'))
     return path
   return `${getEnvBaseUrl().replace(/\/$/, '')}${path.startsWith('/') ? path : `/${path}`}`
+}
+
+/** 旧签名过期后，凭当前登录状态重新校验所有权并换取新地址。 */
+export function refreshFoodImages(imageUrls: string[]) {
+  return http.post<string[]>('/api/v1/upload/access', { imageUrls })
+}
+
+/** 预览前刷新整组照片，避免持久化草稿中的临时地址过期。 */
+export async function previewFoodImages(url: string, urls: string[]) {
+  try {
+    const fresh = await refreshFoodImages(urls)
+    uni.previewImage({ urls: fresh, current: fresh[Math.max(0, urls.indexOf(url))] })
+  }
+  catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : '照片暂时无法访问，请重新上传', icon: 'none' })
+  }
 }
 
 /** 上传单张本地照片并返回存储地址；AI 识别由用户另行触发。 */
@@ -177,8 +188,12 @@ export function requestSse<T>(
       },
       body: JSON.stringify(data),
     }).then(async (response) => {
-      if (!response.ok)
-        throw new Error(`请求失败（${response.status}）`)
+      if (!response.ok) {
+        const retry = Number(response.headers.get('Retry-After'))
+        throw new Error(response.status === 429
+          ? `请求过于频繁，请${retry > 0 ? `${retry} 秒后` : '稍后'}再试`
+          : `请求失败（${response.status}）`)
+      }
       const reader = response.body?.getReader()
       if (!reader)
         throw new Error('当前环境不支持流式响应')
@@ -215,7 +230,11 @@ export function requestSse<T>(
         if (stopped)
           return
         if (res.statusCode < 200 || res.statusCode >= 300) {
-          fail(new Error(`请求失败（${res.statusCode}）`))
+          const headers = res.header || {}
+          const retry = Number(headers['Retry-After'] || headers['retry-after'])
+          fail(new Error(res.statusCode === 429
+            ? `请求过于频繁，请${retry > 0 ? `${retry} 秒后` : '稍后'}再试`
+            : `请求失败（${res.statusCode}）`))
           return
         }
         try {

@@ -15,7 +15,7 @@ setActivePinia(store)
 
 export default store
 
-export * from './chat'
+export * from './record'
 // 模块统一导出
 export * from './token'
 export * from './user'

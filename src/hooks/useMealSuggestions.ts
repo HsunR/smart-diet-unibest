@@ -1,6 +1,6 @@
 import type { Ref } from 'vue'
 import type { StreamControl } from '@/api/smartdiet'
-import type { FoodDraft } from '@/store/chat'
+import type { FoodDraft } from '@/store/record'
 import { onScopeDispose, ref, watch } from 'vue'
 import { streamMealSuggestions } from '@/api/smartdiet'
 

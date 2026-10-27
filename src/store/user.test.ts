@@ -57,6 +57,6 @@ describe('useUserStore', () => {
     const store = useUserStore()
     await store.fetchUserInfo()
     expect(store.userInfo.id).toBe('user-1')
-    expect(store.userInfo.age).toBe(25)
+    expect(store.userInfo.age).toBe(mockUser.age)
   })
 })

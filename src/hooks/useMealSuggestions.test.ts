@@ -1,4 +1,4 @@
-import type { FoodDraft } from '@/store/chat'
+import type { FoodDraft } from '@/store/record'
 import type { MealSuggestionEvent, StreamControl } from '@/api/smartdiet'
 import { effectScope, ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'

@@ -1,4 +1,4 @@
-import type { FoodDraft } from '@/store/chat'
+import type { FoodDraft } from '@/store/record'
 import type { MealSuggestionEvent, StreamControl } from '@/api/smartdiet'
 import { flushPromises, mount } from '@vue/test-utils'
 import { computed, reactive, ref, watch } from 'vue'
@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   history: vi.fn(),
 }))
 vi.mock('@/store', () => ({
-  useChatStore: () => mocks.store,
+  useRecordStore: () => mocks.store,
   useTokenStore: () => ({ updateNowTime: () => ({ hasLogin: true }) }),
 }))
 vi.mock('@/api/smartdiet', () => ({
@@ -32,7 +32,7 @@ vi.mock('@/api/smartdiet', () => ({
 vi.mock('@/components/DateCalendar.vue', () => ({ default: { template: '<div />' } }))
 vi.mock('@/components/SmartDietHeader.vue', () => ({ default: { template: '<div />' } }))
 vi.mock('@/hooks/usePageHeader', () => ({ usePageHeader: () => ({ pageHeaderStyle: {} }) }))
-vi.mock('@/utils/smartdiet', async (importOriginal) => ({
+vi.mock('@/utils/smartdiet', async importOriginal => ({
   ...await importOriginal<typeof import('@/utils/smartdiet')>(),
   chooseImages: async () => ['local-a', 'local-b'],
   getCurrentMealType: () => 'lunch',
@@ -44,8 +44,12 @@ beforeEach(() => {
   mocks.history.mockResolvedValue([])
   const storage = new Map<string, unknown>()
   vi.mocked(uni.getStorageSync).mockImplementation(key => storage.get(key))
-  vi.mocked(uni.setStorageSync).mockImplementation((key, value) => { storage.set(key, value) })
-  vi.mocked(uni.removeStorageSync).mockImplementation(key => { storage.delete(key) })
+  vi.mocked(uni.setStorageSync).mockImplementation((key, value) => {
+    storage.set(key, value)
+  })
+  vi.mocked(uni.removeStorageSync).mockImplementation((key) => {
+    storage.delete(key)
+  })
   for (const [name, value] of Object.entries({ ref, computed, reactive, watch, definePage: () => {}, onLoad: (fn: () => void) => fn(), onShow: (fn: () => void) => mocks.showHooks.push(fn), onPullDownRefresh: () => {} }))
     vi.stubGlobal(name, value)
   mocks.store = reactive({ draft: {
@@ -132,7 +136,7 @@ it.each(['breakfast', 'lunch', 'dinner', 'other'] as const)('opens an empty repo
   selectedDate.setDate(selectedDate.getDate() + 2)
   await report.findAll('.record-cell')[mealIndex * 7 + 2].trigger('click')
   expect(uni.showModal).not.toHaveBeenCalled()
-  expect(uni.switchTab).toHaveBeenCalledWith(expect.objectContaining({ url: '/pages/chat/index' }))
+  expect(uni.switchTab).toHaveBeenCalledWith(expect.objectContaining({ url: '/pages/record/index' }))
   expect(uni.getStorageSync('pendingRecord')).toEqual({ date: formatDate(selectedDate), mealType })
   onFormShow()
   await flushPromises()
@@ -215,9 +219,18 @@ it('expands and collapses the weekly calendar without changing the selected week
 it('preserves photo cells and carousel in expanded mode, opens the selected record, and switches weeks', async () => {
   const date = formatDate(startOfWeek(new Date()))
   const record = {
-    id: 'first', userId: 'user', date, mealType: 'lunch', name: '第一份午餐',
-    description: '米饭配蔬菜', rating: 4, price: 18, positiveTags: [], negativeTags: [],
-    imageUrls: ['https://example.test/meal.jpg'], imageUrl: 'https://example.test/meal.jpg', createdAt: '',
+    id: 'first',
+    userId: 'user',
+    date,
+    mealType: 'lunch',
+    name: '第一份午餐',
+    description: '米饭配蔬菜',
+    rating: 4,
+    price: 18,
+    positiveTags: [],
+    negativeTags: [],
+    imageUrls: ['https://example.test/meal.jpg'],
+    createdAt: '',
   }
   mocks.history.mockResolvedValue([record, { ...record, id: 'second', name: '第二份午餐', rating: 5 }])
   const report = mount(ReportPage, mountOptions)
@@ -250,7 +263,7 @@ it('exits expanded mode and passes the exact selected cell to the add-record pag
   const date = startOfWeek(new Date())
   date.setDate(date.getDate() + 2)
   expect(uni.getStorageSync('pendingRecord')).toEqual({ date: formatDate(date), mealType: 'other' })
-  expect(uni.switchTab).toHaveBeenCalledWith(expect.objectContaining({ url: '/pages/chat/index' }))
+  expect(uni.switchTab).toHaveBeenCalledWith(expect.objectContaining({ url: '/pages/record/index' }))
   expect(report.classes()).not.toContain('report-page-expanded')
   report.unmount()
 })

@@ -43,7 +43,7 @@ export const nativeTabbarList: NativeTabBarItem[] = [
 export const customTabbarList: CustomTabBarItem[] = [
   {
     text: '记录',
-    pagePath: 'pages/chat/index',
+    pagePath: 'pages/record/index',
     iconType: 'image',
     icon: '/static/smartdiet-tabbar/record.svg',
     iconActive: '/static/smartdiet-tabbar/record-active.svg',

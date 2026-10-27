@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { FoodRecord, MealType } from '@/api/types/smartdiet'
-import { absoluteAssetUrl, deleteRecord, getRecordHistory, updateRecord, uploadFoodImage } from '@/api/smartdiet'
+import { absoluteAssetUrl, deleteRecord, getRecordHistory, previewFoodImages, updateRecord, uploadFoodImage } from '@/api/smartdiet'
 import DateCalendar from '@/components/DateCalendar.vue'
+import PrivateImage from '@/components/PrivateImage.vue'
 import SmartDietHeader from '@/components/SmartDietHeader.vue'
 import { usePageHeader } from '@/hooks/usePageHeader'
 import { useTokenStore } from '@/store'
@@ -99,11 +100,11 @@ const averageScore = computed(() => {
 const detail = computed(() => detailRecords.value[detailIndex.value] || null)
 
 function photos(record: FoodRecord) {
-  return record.imageUrls?.length ? record.imageUrls : (record.imageUrl ? [record.imageUrl] : [])
+  return record.imageUrls
 }
 
 function previewPhoto(url: string, urls: string[]) {
-  uni.previewImage({ urls: urls.map(absoluteAssetUrl), current: absoluteAssetUrl(url) })
+  previewFoodImages(url, urls)
 }
 
 async function addEditPhotos() {
@@ -137,7 +138,6 @@ async function addEditPhotos() {
 function removeEditPhoto(index: number) {
   if (editRecord.value && !uploadingPhotos.value && !saving.value) {
     editRecord.value.imageUrls.splice(index, 1)
-    editRecord.value.imageUrl = editRecord.value.imageUrls[0] || ''
   }
 }
 
@@ -199,7 +199,7 @@ function openCell(date: string, mealType: MealType, recordIndex = 0) {
     expanded.value = false
     uni.setStorageSync('pendingRecord', { date, mealType })
     uni.switchTab({
-      url: '/pages/chat/index',
+      url: '/pages/record/index',
       fail() {
         uni.removeStorageSync('pendingRecord')
         uni.showToast({ title: '打开记录页失败，请重试', icon: 'none' })
@@ -345,14 +345,14 @@ function removeCurrent() {
               <view v-if="cellRecords(day.date, meal.value).length > 1" class="record-marquee-viewport">
                 <view class="record-marquee-track" :style="{ width: `${cellRecords(day.date, meal.value).length * 200}%`, animationDuration: `${cellRecords(day.date, meal.value).length * 7}s` }">
                   <view v-for="(item, index) in loopedCellRecords(day.date, meal.value)" :key="`${item.id}-${index}`" class="record-slide" :style="{ width: `${100 / (cellRecords(day.date, meal.value).length * 2)}%` }" @click.stop="openCell(day.date, meal.value, index % cellRecords(day.date, meal.value).length)">
-                    <image v-if="photos(item).length" class="cell-image" :src="absoluteAssetUrl(photos(item)[0])" mode="aspectFill" />
+                    <PrivateImage v-if="photos(item).length" class="cell-image" :src="absoluteAssetUrl(photos(item)[0])" mode="aspectFill" />
                     <text v-if="item.rating > 0" class="cell-score">{{ item.rating }}★</text>
                     <text v-if="!photos(item).length" class="cell-food">{{ item.name || '已记录' }}</text>
                     <text class="record-count">{{ index % cellRecords(day.date, meal.value).length + 1 }}/{{ cellRecords(day.date, meal.value).length }}</text>
                   </view>
                 </view>
               </view>
-              <view v-else-if="cellRecords(day.date, meal.value).length" class="record-slide" @click.stop="openCell(day.date, meal.value)"><image v-if="photos(cellRecords(day.date, meal.value)[0]).length" class="cell-image" :src="absoluteAssetUrl(photos(cellRecords(day.date, meal.value)[0])[0])" mode="aspectFill" /><text v-if="cellRecords(day.date, meal.value)[0].rating > 0" class="cell-score">{{ cellRecords(day.date, meal.value)[0].rating }}★</text><text v-if="!photos(cellRecords(day.date, meal.value)[0]).length" class="cell-food">{{ cellRecords(day.date, meal.value)[0].name || '已记录' }}</text></view>
+              <view v-else-if="cellRecords(day.date, meal.value).length" class="record-slide" @click.stop="openCell(day.date, meal.value)"><PrivateImage v-if="photos(cellRecords(day.date, meal.value)[0]).length" class="cell-image" :src="absoluteAssetUrl(photos(cellRecords(day.date, meal.value)[0])[0])" mode="aspectFill" /><text v-if="cellRecords(day.date, meal.value)[0].rating > 0" class="cell-score">{{ cellRecords(day.date, meal.value)[0].rating }}★</text><text v-if="!photos(cellRecords(day.date, meal.value)[0]).length" class="cell-food">{{ cellRecords(day.date, meal.value)[0].name || '已记录' }}</text></view>
               <text v-else class="add-mark">＋</text>
             </view>
           </template>
@@ -391,7 +391,7 @@ function removeCurrent() {
           <template v-if="!editing">
             <view v-if="photos(detail).length" class="detail-hero">
               <swiper :key="detail.id" class="detail-photo-swiper" :circular="photos(detail).length > 1" @change="detailPhotoIndex = $event.detail.current">
-                <swiper-item v-for="(url, index) in photos(detail)" :key="`${url}-${index}`"><image class="detail-hero-image" :src="absoluteAssetUrl(url)" mode="aspectFill" @click="previewPhoto(url, photos(detail))" /></swiper-item>
+                <swiper-item v-for="(url, index) in photos(detail)" :key="`${url}-${index}`"><PrivateImage class="detail-hero-image" :src="absoluteAssetUrl(url)" mode="aspectFill" @click="previewPhoto(url, photos(detail))" /></swiper-item>
               </swiper>
               <text v-if="photos(detail).length > 1" class="detail-photo-counter">{{ detailPhotoIndex + 1 }} / {{ photos(detail).length }}</text>
             </view>
@@ -425,7 +425,7 @@ function removeCurrent() {
           <view class="edit-field vertical">
             <text>饮食描述</text><textarea v-model="editRecord.description" auto-height :maxlength="1000" />
           </view>
-          <view class="edit-field vertical"><text>餐食照片（{{ photos(editRecord).length }}/6）</text><view class="edit-photo-grid"><view v-for="(url, index) in photos(editRecord)" :key="`${url}-${index}`" class="edit-photo"><image :src="absoluteAssetUrl(url)" mode="aspectFill" @click="previewPhoto(url, photos(editRecord))" /><text class="edit-photo-remove" @click.stop="removeEditPhoto(index)">×</text></view><view v-if="photos(editRecord).length < 6" class="edit-photo-add" @click="addEditPhotos">{{ uploadingPhotos ? '上传中' : '＋ 添加' }}</view></view></view>
+          <view class="edit-field vertical"><text>餐食照片（{{ photos(editRecord).length }}/6）</text><view class="edit-photo-grid"><view v-for="(url, index) in photos(editRecord)" :key="`${url}-${index}`" class="edit-photo"><PrivateImage :src="absoluteAssetUrl(url)" mode="aspectFill" @click="previewPhoto(url, photos(editRecord))" /><text class="edit-photo-remove" @click.stop="removeEditPhoto(index)">×</text></view><view v-if="photos(editRecord).length < 6" class="edit-photo-add" @click="addEditPhotos">{{ uploadingPhotos ? '上传中' : '＋ 添加' }}</view></view></view>
           <view class="edit-field">
             <text>饮食价格</text><input v-model.number="editRecord.price" type="digit" placeholder="未填写">
           </view>

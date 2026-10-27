@@ -7,8 +7,8 @@ SmartDiet 已从原生微信小程序迁移为 unibest（uni-app + Vue 3 + TypeS
 ```text
 src/
   api/              # SmartDiet API 与类型
-  pages/            # 登录、引导、聊天、报告、个人资料
-  store/            # token、用户资料、聊天记录
+  pages/            # 登录、引导、饮食记录、报告、个人资料
+  store/            # token、用户资料、饮食记录草稿
   tabbar/           # unibest 自定义 tabbar
   utils/            # 日期、餐次、营养目标等工具
 backend/            # FastAPI、SQLAlchemy、Alembic、测试和 Docker
@@ -62,7 +62,6 @@ python -m pytest
 ## 已迁移功能
 
 - 微信登录、H5 本地 mock 登录与首次六步画像引导
-- AI 文本流式对话及持久化多轮会话 ID
 - 拍照/相册上传、流式食物识别、食物名称与重量修正
 - 日期、餐次、满意度选择和饮食记录保存
 - 周日历、每日趋势、记录详情、编辑和删除
@@ -70,3 +69,7 @@ python -m pytest
 - FastAPI、PostgreSQL、Alembic、Docker Compose 与现有自动化测试
 
 营养目标为基于身体资料的估算值，不构成医疗或诊断建议。
+
+饮食记录首页为 `pages/record/index`。未使用的闲聊接口、会话状态和模型已移除，食物识别仍保留。
+
+上传照片存放在私有桶中。后端返回短时签名 URL，照片加载失败和预览时会凭当前登录状态重新申请访问地址；保存和识别时，后端会再次校验图片属于当前用户。小程序的 downloadFile／图片合法域名需包含 `MINIO_PUBLIC_URL` 的域名。
