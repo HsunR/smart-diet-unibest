@@ -189,10 +189,7 @@ export function requestSse<T>(
       body: JSON.stringify(data),
     }).then(async (response) => {
       if (!response.ok) {
-        const retry = Number(response.headers.get('Retry-After'))
-        throw new Error(response.status === 429
-          ? `请求过于频繁，请${retry > 0 ? `${retry} 秒后` : '稍后'}再试`
-          : `请求失败（${response.status}）`)
+        throw new Error(`请求失败（${response.status}）`)
       }
       const reader = response.body?.getReader()
       if (!reader)
@@ -230,11 +227,7 @@ export function requestSse<T>(
         if (stopped)
           return
         if (res.statusCode < 200 || res.statusCode >= 300) {
-          const headers = res.header || {}
-          const retry = Number(headers['Retry-After'] || headers['retry-after'])
-          fail(new Error(res.statusCode === 429
-            ? `请求过于频繁，请${retry > 0 ? `${retry} 秒后` : '稍后'}再试`
-            : `请求失败（${res.statusCode}）`))
+          fail(new Error(`请求失败（${res.statusCode}）`))
           return
         }
         try {
