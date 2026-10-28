@@ -345,14 +345,14 @@ function removeCurrent() {
               <view v-if="cellRecords(day.date, meal.value).length > 1" class="record-marquee-viewport">
                 <view class="record-marquee-track" :style="{ width: `${cellRecords(day.date, meal.value).length * 200}%`, animationDuration: `${cellRecords(day.date, meal.value).length * 7}s` }">
                   <view v-for="(item, index) in loopedCellRecords(day.date, meal.value)" :key="`${item.id}-${index}`" class="record-slide" :style="{ width: `${100 / (cellRecords(day.date, meal.value).length * 2)}%` }" @click.stop="openCell(day.date, meal.value, index % cellRecords(day.date, meal.value).length)">
-                    <PrivateImage v-if="photos(item).length" class="cell-image" :src="absoluteAssetUrl(photos(item)[0])" mode="aspectFill" />
+                    <PrivateImage v-if="photos(item).length" class="cell-image" :src="absoluteAssetUrl(photos(item)[0])" mode="aspectFit" />
                     <text v-if="item.rating > 0" class="cell-score">{{ item.rating }}★</text>
                     <text v-if="!photos(item).length" class="cell-food">{{ item.name || '已记录' }}</text>
                     <text class="record-count">{{ index % cellRecords(day.date, meal.value).length + 1 }}/{{ cellRecords(day.date, meal.value).length }}</text>
                   </view>
                 </view>
               </view>
-              <view v-else-if="cellRecords(day.date, meal.value).length" class="record-slide" @click.stop="openCell(day.date, meal.value)"><PrivateImage v-if="photos(cellRecords(day.date, meal.value)[0]).length" class="cell-image" :src="absoluteAssetUrl(photos(cellRecords(day.date, meal.value)[0])[0])" mode="aspectFill" /><text v-if="cellRecords(day.date, meal.value)[0].rating > 0" class="cell-score">{{ cellRecords(day.date, meal.value)[0].rating }}★</text><text v-if="!photos(cellRecords(day.date, meal.value)[0]).length" class="cell-food">{{ cellRecords(day.date, meal.value)[0].name || '已记录' }}</text></view>
+              <view v-else-if="cellRecords(day.date, meal.value).length" class="record-slide" @click.stop="openCell(day.date, meal.value)"><PrivateImage v-if="photos(cellRecords(day.date, meal.value)[0]).length" class="cell-image" :src="absoluteAssetUrl(photos(cellRecords(day.date, meal.value)[0])[0])" mode="aspectFit" /><text v-if="cellRecords(day.date, meal.value)[0].rating > 0" class="cell-score">{{ cellRecords(day.date, meal.value)[0].rating }}★</text><text v-if="!photos(cellRecords(day.date, meal.value)[0]).length" class="cell-food">{{ cellRecords(day.date, meal.value)[0].name || '已记录' }}</text></view>
               <text v-else class="add-mark">＋</text>
             </view>
           </template>
@@ -391,7 +391,7 @@ function removeCurrent() {
           <template v-if="!editing">
             <view v-if="photos(detail).length" class="detail-hero">
               <swiper :key="detail.id" class="detail-photo-swiper" :circular="photos(detail).length > 1" @change="detailPhotoIndex = $event.detail.current">
-                <swiper-item v-for="(url, index) in photos(detail)" :key="`${url}-${index}`"><PrivateImage class="detail-hero-image" :src="absoluteAssetUrl(url)" mode="aspectFill" @click="previewPhoto(url, photos(detail))" /></swiper-item>
+                <swiper-item v-for="(url, index) in photos(detail)" :key="`${url}-${index}`"><PrivateImage class="detail-hero-image" :src="absoluteAssetUrl(url)" mode="aspectFit" @click="previewPhoto(url, photos(detail))" /></swiper-item>
               </swiper>
               <text v-if="photos(detail).length > 1" class="detail-photo-counter">{{ detailPhotoIndex + 1 }} / {{ photos(detail).length }}</text>
             </view>
@@ -425,7 +425,7 @@ function removeCurrent() {
           <view class="edit-field vertical">
             <text>饮食描述</text><textarea v-model="editRecord.description" auto-height :maxlength="1000" />
           </view>
-          <view class="edit-field vertical"><text>餐食照片（{{ photos(editRecord).length }}/6）</text><view class="edit-photo-grid"><view v-for="(url, index) in photos(editRecord)" :key="`${url}-${index}`" class="edit-photo"><PrivateImage :src="absoluteAssetUrl(url)" mode="aspectFill" @click="previewPhoto(url, photos(editRecord))" /><text class="edit-photo-remove" @click.stop="removeEditPhoto(index)">×</text></view><view v-if="photos(editRecord).length < 6" class="edit-photo-add" @click="addEditPhotos">{{ uploadingPhotos ? '上传中' : '＋ 添加' }}</view></view></view>
+          <view class="edit-field vertical"><text>餐食照片（{{ photos(editRecord).length }}/6）</text><view class="edit-photo-grid"><view v-for="(url, index) in photos(editRecord)" :key="`${url}-${index}`" class="edit-photo"><PrivateImage class="edit-photo-image" :src="absoluteAssetUrl(url)" mode="aspectFit" @click="previewPhoto(url, photos(editRecord))" /><text class="edit-photo-remove" @click.stop="removeEditPhoto(index)">×</text></view><view v-if="photos(editRecord).length < 6" class="edit-photo-add" @click="addEditPhotos">{{ uploadingPhotos ? '上传中' : '＋ 添加' }}</view></view></view>
           <view class="edit-field">
             <text>饮食价格</text><input v-model.number="editRecord.price" type="digit" placeholder="未填写">
           </view>
@@ -778,7 +778,14 @@ function removeCurrent() {
 .detail-photo-row .detail-image { width: 300rpx; height: 300rpx; flex: none; margin-top: 0; }
 .edit-photo-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10rpx; width: 100%; }
 .edit-photo, .edit-photo-add { position: relative; height: 132rpx; border-radius: 15rpx; overflow: hidden; }
-.edit-photo image { width: 100%; height: 100%; }
+.edit-photo {
+  background: #f4f6f1;
+}
+.edit-photo-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
 .edit-photo-remove { position: absolute; top: 4rpx; right: 4rpx; width: 30rpx; height: 30rpx; border-radius: 50%; color: #fff; background: rgba(26, 45, 31, .75); line-height: 28rpx; text-align: center; }
 .edit-photo-add { border: 2rpx dashed #b9cfb2; color: #5c845d; background: #f5f9ef; display: flex; align-items: center; justify-content: center; }
 .detail-score-row {
@@ -1028,7 +1035,10 @@ function removeCurrent() {
 .record-slide { position: relative; flex: none; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 @keyframes record-marquee { to { transform: translateX(-50%); } }
 @media (prefers-reduced-motion: reduce) { .record-marquee-track { animation: none; } }
-.cell-image { opacity: 1; }
+.cell-image {
+  display: block;
+  opacity: 1;
+}
 .cell-score { position: absolute; bottom: 3rpx; right: 3rpx; padding: 1rpx 4rpx; border-radius: 7rpx; background: rgba(255, 255, 255, 0.9); color: #1c6b3e; font-size: 15rpx; line-height: 1.2; }
 .cell-food { width: 90%; margin: 0; font-size: 15rpx; }
 .record-count { top: 2rpx; right: 2rpx; font-size: 13rpx; }
@@ -1052,6 +1062,9 @@ function removeCurrent() {
 .detail-scroll { flex: 1; width: 100%; height: 0; min-height: 0; }
 .detail-hero { position: relative; height: 385rpx; overflow: hidden; border-radius: 28rpx; background: #eef2e8; }
 .detail-photo-swiper, .detail-hero-image { width: 100%; height: 100%; }
+.detail-hero-image {
+  display: block;
+}
 .detail-photo-counter { position: absolute; right: 15rpx; bottom: 15rpx; padding: 6rpx 15rpx; border-radius: 999rpx; color: #fff; background: rgba(25, 49, 34, 0.66); font-size: 20rpx; font-weight: 700; }
 .detail-photo-empty { height: 230rpx; border-radius: 28rpx; background: radial-gradient(circle at 50% 35%, #f8f5e7, #e9f1e5); color: #8aa08a; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8rpx; font-size: 20rpx; }
 .detail-empty-icon { font-size: 58rpx; }

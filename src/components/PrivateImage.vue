@@ -2,6 +2,15 @@
 import { ref, watch } from 'vue'
 import { absoluteAssetUrl, refreshFoodImages } from '@/api/smartdiet'
 
+// #ifdef MP-WEIXIN
+// 配合 mergeVirtualHostAttributes，将调用处的尺寸和圆角样式应用到图片。
+defineOptions({
+  options: {
+    virtualHost: true,
+  },
+})
+// #endif
+
 const props = withDefaults(defineProps<{
   src: string
   mode?: 'aspectFill' | 'aspectFit' | 'widthFix' | 'scaleToFill'

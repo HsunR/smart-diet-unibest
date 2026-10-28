@@ -414,7 +414,7 @@ onShow(() => {
               </view>
               <view class="photo-grid">
                 <view v-for="(url, index) in draft.imageUrls" :key="`${url}-${index}`" class="photo-tile">
-                  <PrivateImage :src="absoluteAssetUrl(url)" mode="aspectFill" @click="preview(url, draft.imageUrls)" /><view class="photo-remove" @click.stop="removeRecordImage(index)">
+                  <PrivateImage class="photo-image" :src="absoluteAssetUrl(url)" mode="aspectFit" @click="preview(url, draft.imageUrls)" /><view class="photo-remove" @click.stop="removeRecordImage(index)">
                     ×
                   </view>
                 </view>
@@ -741,7 +741,14 @@ onShow(() => {
 .photo-count { color: #7c927e; font-size: 20rpx; }
 .photo-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 13rpx; }
 .photo-tile, .photo-add { position: relative; height: 166rpx; border-radius: 20rpx; overflow: hidden; }
-.photo-tile image { width: 100%; height: 100%; }
+.photo-tile {
+  background: #f4f6f1;
+}
+.photo-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
 .photo-remove { position: absolute; top: 7rpx; right: 7rpx; width: 35rpx; height: 35rpx; border-radius: 50%; color: #fff; background: rgba(31, 50, 37, 0.74); font-size: 29rpx; line-height: 33rpx; text-align: center; }
 .photo-add { border: 2rpx dashed #b9cfb2; background: #f6f9ef; color: #68866a; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5rpx; font-size: 19rpx; }
 .photo-add-icon { color: #4b8752; font-size: 49rpx; line-height: 1; font-weight: 300; }
