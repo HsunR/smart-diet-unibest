@@ -46,3 +46,13 @@ it('does not loop on a denied image or request access for bundled assets', async
   await wrapper.find('image').trigger('error')
   expect(refreshFoodImages).toHaveBeenCalledTimes(1)
 })
+
+it('converts an HTTP draft to a freshly signed HTTPS URL before displaying it', async () => {
+  vi.mocked(refreshFoodImages).mockResolvedValue(['https://images.hsunr.xyz/smartdiet/users/photo.png?fresh=1'])
+  const old = 'http://previous-host:9002/smartdiet/users/photo.png?expired=1'
+  const wrapper = mount(PrivateImage, { props: { src: old } })
+  expect(wrapper.find('image').attributes('src')).toBe('')
+  await flushPromises()
+  expect(refreshFoodImages).toHaveBeenCalledWith([old])
+  expect(wrapper.find('image').attributes('src')).toBe('https://images.hsunr.xyz/smartdiet/users/photo.png?fresh=1')
+})

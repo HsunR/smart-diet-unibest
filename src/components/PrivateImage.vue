@@ -19,13 +19,17 @@ const resolved = ref('')
 let attempted = false
 
 watch(() => props.src, (value) => {
-  resolved.value = absoluteAssetUrl(value)
+  // Old HTTP drafts must get a fresh HTTPS signature before being displayed.
+  const oldHttp = /^http:\/\//i.test(value)
+  resolved.value = oldHttp ? '' : absoluteAssetUrl(value)
   attempted = false
+  if (oldHttp)
+    void refresh()
 }, { immediate: true })
 
 /** 每个源地址只重试一次；刷新失败时保留图片的原生错误状态。 */
 async function refresh() {
-  if (attempted || !/^https?:\/\//.test(props.src))
+  if (attempted || !/^https?:\/\//i.test(props.src))
     return
   attempted = true
   const original = props.src
